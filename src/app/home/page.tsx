@@ -2,9 +2,14 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 
 // Mock data for recent workspaces
 const recentWorkspaces = [
@@ -88,13 +93,28 @@ const allWorkspaces = [
 ];
 
 export default function HomePage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'recent' | 'all'>('recent');
+  const [isNewWorkspaceOpen, setIsNewWorkspaceOpen] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [workspaceDescription, setWorkspaceDescription] = useState('');
+  const [workspaceType, setWorkspaceType] = useState('');
 
   const workspacesToShow = activeTab === 'recent' ? recentWorkspaces : allWorkspaces;
   const filteredWorkspaces = workspacesToShow.filter((workspace) =>
     workspace.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleCreateWorkspace = () => {
+    // Handle workspace creation logic here
+    console.log('Creating workspace:', { workspaceName, workspaceDescription, workspaceType });
+    setIsNewWorkspaceOpen(false);
+    // Reset form
+    setWorkspaceName('');
+    setWorkspaceDescription('');
+    setWorkspaceType('');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -130,12 +150,76 @@ export default function HomePage() {
                 Continue your annotation work or start a new workspace
               </p>
             </div>
-            <Button size="lg" className="gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Workspace
-            </Button>
+            <div className="flex gap-3">
+              <Button size="lg" variant="outline" className="gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                Import Workspace
+              </Button>
+              <Dialog open={isNewWorkspaceOpen} onOpenChange={setIsNewWorkspaceOpen}>
+                <DialogTrigger asChild>
+                  <Button size="lg" className="gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    New Workspace
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[525px]">
+                  <DialogHeader>
+                    <DialogTitle>Create New Workspace</DialogTitle>
+                    <DialogDescription>
+                      Set up a new annotation workspace. Choose a name, description, and annotation type.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="name">Workspace Name</Label>
+                      <Input
+                        id="name"
+                        placeholder="e.g., Customer Feedback Analysis"
+                        value={workspaceName}
+                        onChange={(e) => setWorkspaceName(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="Describe the purpose of this workspace..."
+                        value={workspaceDescription}
+                        onChange={(e) => setWorkspaceDescription(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="type">Annotation Type</Label>
+                      <Select value={workspaceType} onValueChange={setWorkspaceType}>
+                        <SelectTrigger id="type">
+                          <SelectValue placeholder="Select annotation type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ner">Named Entity Recognition</SelectItem>
+                          <SelectItem value="sentiment">Sentiment Analysis</SelectItem>
+                          <SelectItem value="classification">Text Classification</SelectItem>
+                          <SelectItem value="relation">Relation Extraction</SelectItem>
+                          <SelectItem value="custom">Custom Annotation</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsNewWorkspaceOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreateWorkspace} disabled={!workspaceName || !workspaceType}>
+                      Create Workspace
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
           {/* Search Bar */}
@@ -190,6 +274,7 @@ export default function HomePage() {
             <Card
               key={workspace.id}
               className="hover:shadow-lg transition-shadow cursor-pointer group"
+              onClick={() => router.push(`/workspace/${workspace.id}`)}
             >
               <CardHeader>
                 <div className="flex items-start justify-between mb-2">

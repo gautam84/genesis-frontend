@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -25,29 +27,42 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 dark:from-slate-900 dark:to-slate-800">
-      <div className="w-full max-w-md p-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 relative overflow-hidden">
+      {/* Decorative background elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-[var(--primary)] opacity-10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500 opacity-10 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="w-full max-w-md p-8 relative z-10">
         {/* Logo/Brand Section */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-[var(--primary)] mb-2">
-            Genesis
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400">
+        <div className="text-center mb-10">
+          <div className="flex justify-center mb-6">
+            <Image
+              src="/genesis-logo.svg"
+              alt="Genesis Logo"
+              width={200}
+              height={92}
+              priority
+              className="h-20 w-auto"
+            />
+          </div>
+          <p className="text-slate-600 dark:text-slate-400 text-base">
             NLP Annotation Platform
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 border border-slate-200 dark:border-slate-700">
-          <h2 className="text-2xl font-semibold text-slate-800 dark:text-white mb-6">
-            Sign In
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-slate-200/50 dark:border-slate-700/50">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-8">
+            Welcome back
           </h2>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Input */}
             <div>
-              <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">
-                Email
+              <Label htmlFor="email" className="text-slate-700 dark:text-slate-300 font-medium mb-2">
+                Email address
               </Label>
               <Input
                 id="email"
@@ -56,12 +71,13 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="you@example.com"
+                className="h-12 rounded-xl"
               />
             </div>
 
             {/* Password Input */}
             <div>
-              <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">
+              <Label htmlFor="password" className="text-slate-700 dark:text-slate-300 font-medium mb-2">
                 Password
               </Label>
               <Input
@@ -71,25 +87,22 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="Enter your password"
+                className="h-12 rounded-xl"
               />
             </div>
 
             {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 rounded border-slate-300 text-[var(--primary)]
-                           focus:ring-[var(--primary)] cursor-pointer"
-                />
-                <span className="ml-2 text-slate-600 dark:text-slate-400">
+              <label className="flex items-center cursor-pointer group gap-2">
+                <Checkbox id="remember" />
+                <span className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-300 transition">
                   Remember me
                 </span>
               </label>
               <Link
                 href="#"
                 className="text-[var(--primary)] hover:text-[var(--primary-dark)]
-                         transition-colors font-medium"
+                         transition-colors font-semibold"
               >
                 Forgot password?
               </Link>
@@ -99,31 +112,48 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full"
+              className="w-full mt-8"
               size="lg"
             >
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Signing in...
+                </span>
+              ) : (
+                'Sign in to your account'
+              )}
             </Button>
           </form>
 
           {/* Sign Up Link */}
-          <div className="mt-6 text-center text-sm">
-            <span className="text-slate-600 dark:text-slate-400">
-              Don't have an account?{' '}
-            </span>
+          <div className="mt-8 text-center">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-4 bg-white/80 dark:bg-slate-900/80 text-slate-500 dark:text-slate-400">
+                  New to Genesis?
+                </span>
+              </div>
+            </div>
             <Link
               href="/signup"
-              className="text-[var(--primary)] hover:text-[var(--primary-dark)]
-                       font-medium transition-colors"
+              className="mt-4 inline-block text-[var(--primary)] hover:text-[var(--primary-dark)]
+                       font-semibold transition-colors"
             >
-              Sign up
+              Create an account
             </Link>
           </div>
         </div>
 
         {/* Footer */}
         <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-8">
-          Secure authentication powered by Genesis
+          Protected by enterprise-grade security
         </p>
       </div>
     </div>

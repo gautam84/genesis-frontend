@@ -199,7 +199,7 @@ export default function VerifyEmailPage() {
           )}
 
           <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
-            Click the link in the email to verify your account. If you don't see it, check your spam folder.
+            Click the link in the email to verify your account. If you don&apos;t see it, check your spam folder.
           </p>
 
           <Button

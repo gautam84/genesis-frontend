@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -96,29 +98,43 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
-      <div className="w-full max-w-2xl">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 relative overflow-hidden py-12 px-4">
+      {/* Decorative background elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 -right-40 w-96 h-96 bg-[var(--primary)] opacity-10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-20 -left-40 w-96 h-96 bg-purple-500 opacity-10 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-br from-blue-200/20 to-purple-200/20 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="w-full max-w-2xl relative z-10">
         {/* Logo/Brand Section */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-[var(--primary)] mb-2">
-            Genesis
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400">
+        <div className="text-center mb-10">
+          <div className="flex justify-center mb-6">
+            <Image
+              src="/genesis-logo.svg"
+              alt="Genesis Logo"
+              width={200}
+              height={92}
+              priority
+              className="h-20 w-auto"
+            />
+          </div>
+          <p className="text-slate-600 dark:text-slate-400 text-base">
             Create your NLP Annotation account
           </p>
         </div>
 
         {/* Sign-up Card */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 border border-slate-200 dark:border-slate-700">
-          <h2 className="text-2xl font-semibold text-slate-800 dark:text-white mb-6">
-            Sign Up
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 md:p-10 border border-slate-200/50 dark:border-slate-700/50">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-8">
+            Get started with Genesis
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Name Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="firstName" className="text-slate-700 dark:text-slate-300">
+                <Label htmlFor="firstName" className="text-slate-700 dark:text-slate-300 font-medium">
                   First Name <span className="text-red-500">*</span>
                 </Label>
                 <Input
@@ -127,7 +143,7 @@ export default function SignUpPage() {
                   type="text"
                   value={formData.firstName}
                   onChange={handleInputChange}
-                  className={errors.firstName ? 'border-red-500' : ''}
+                  className={`h-11 rounded-xl ${errors.firstName ? 'border-red-500' : ''}`}
                   placeholder="John"
                 />
                 {errors.firstName && (
@@ -136,7 +152,7 @@ export default function SignUpPage() {
               </div>
 
               <div>
-                <Label htmlFor="lastName" className="text-slate-700 dark:text-slate-300">
+                <Label htmlFor="lastName" className="text-slate-700 dark:text-slate-300 font-medium">
                   Last Name <span className="text-red-500">*</span>
                 </Label>
                 <Input
@@ -145,7 +161,7 @@ export default function SignUpPage() {
                   type="text"
                   value={formData.lastName}
                   onChange={handleInputChange}
-                  className={errors.lastName ? 'border-red-500' : ''}
+                  className={`h-11 rounded-xl ${errors.lastName ? 'border-red-500' : ''}`}
                   placeholder="Doe"
                 />
                 {errors.lastName && (
@@ -156,8 +172,8 @@ export default function SignUpPage() {
 
             {/* Email */}
             <div>
-              <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">
-                Email <span className="text-red-500">*</span>
+              <Label htmlFor="email" className="text-slate-700 dark:text-slate-300 font-medium">
+                Email address <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="email"
@@ -165,7 +181,7 @@ export default function SignUpPage() {
                 type="email"
                 value={formData.email}
                 onChange={handleInputChange}
-                className={errors.email ? 'border-red-500' : ''}
+                className={`h-11 rounded-xl ${errors.email ? 'border-red-500' : ''}`}
                 placeholder="you@example.com"
               />
               {errors.email && (
@@ -175,7 +191,7 @@ export default function SignUpPage() {
 
             {/* Organization */}
             <div>
-              <Label htmlFor="organization" className="text-slate-700 dark:text-slate-300">
+              <Label htmlFor="organization" className="text-slate-700 dark:text-slate-300 font-medium">
                 Organization / Team <span className="text-red-500">*</span>
               </Label>
               <Input
@@ -184,7 +200,7 @@ export default function SignUpPage() {
                 type="text"
                 value={formData.organization}
                 onChange={handleInputChange}
-                className={errors.organization ? 'border-red-500' : ''}
+                className={`h-11 rounded-xl ${errors.organization ? 'border-red-500' : ''}`}
                 placeholder="Your organization name"
               />
               {errors.organization && (
@@ -194,11 +210,11 @@ export default function SignUpPage() {
 
             {/* Role */}
             <div>
-              <Label htmlFor="role" className="text-slate-700 dark:text-slate-300">
+              <Label htmlFor="role" className="text-slate-700 dark:text-slate-300 font-medium">
                 Role <span className="text-red-500">*</span>
               </Label>
               <Select value={formData.role} onValueChange={handleRoleChange}>
-                <SelectTrigger className={errors.role ? 'border-red-500' : ''}>
+                <SelectTrigger className={`h-11 rounded-xl ${errors.role ? 'border-red-500' : ''}`}>
                   <SelectValue placeholder="Select your role" />
                 </SelectTrigger>
                 <SelectContent>
@@ -217,7 +233,7 @@ export default function SignUpPage() {
             {/* Password Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">
+                <Label htmlFor="password" className="text-slate-700 dark:text-slate-300 font-medium">
                   Password <span className="text-red-500">*</span>
                 </Label>
                 <Input
@@ -226,7 +242,7 @@ export default function SignUpPage() {
                   type="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  className={errors.password ? 'border-red-500' : ''}
+                  className={`h-11 rounded-xl ${errors.password ? 'border-red-500' : ''}`}
                   placeholder="Min. 8 characters"
                 />
                 {errors.password && (
@@ -235,7 +251,7 @@ export default function SignUpPage() {
               </div>
 
               <div>
-                <Label htmlFor="confirmPassword" className="text-slate-700 dark:text-slate-300">
+                <Label htmlFor="confirmPassword" className="text-slate-700 dark:text-slate-300 font-medium">
                   Confirm Password <span className="text-red-500">*</span>
                 </Label>
                 <Input
@@ -244,7 +260,7 @@ export default function SignUpPage() {
                   type="password"
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
-                  className={errors.confirmPassword ? 'border-red-500' : ''}
+                  className={`h-11 rounded-xl ${errors.confirmPassword ? 'border-red-500' : ''}`}
                   placeholder="Re-enter password"
                 />
                 {errors.confirmPassword && (
@@ -254,20 +270,15 @@ export default function SignUpPage() {
             </div>
 
             {/* Terms and Conditions */}
-            <div className="flex items-start space-x-2 text-sm">
-              <input
-                type="checkbox"
-                id="terms"
-                required
-                className="w-4 h-4 mt-0.5 rounded border-slate-300 text-[var(--primary)] focus:ring-[var(--primary)] cursor-pointer"
-              />
+            <div className="flex items-start gap-2 text-sm pt-2">
+              <Checkbox id="terms" required className="mt-0.5" />
               <label htmlFor="terms" className="text-slate-600 dark:text-slate-400 cursor-pointer">
                 I agree to the{' '}
-                <a href="#" className="text-[var(--primary)] hover:underline">
+                <a href="#" className="text-[var(--primary)] hover:text-[var(--primary-dark)] font-semibold transition">
                   Terms of Service
                 </a>{' '}
                 and{' '}
-                <a href="#" className="text-[var(--primary)] hover:underline">
+                <a href="#" className="text-[var(--primary)] hover:text-[var(--primary-dark)] font-semibold transition">
                   Privacy Policy
                 </a>
               </label>
@@ -277,23 +288,40 @@ export default function SignUpPage() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full"
+              className="w-full mt-6"
               size="lg"
             >
-              {isLoading ? 'Creating Account...' : 'Create Account'}
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Creating your account...
+                </span>
+              ) : (
+                'Create your account'
+              )}
             </Button>
           </form>
 
           {/* Sign In Link */}
-          <div className="mt-6 text-center text-sm">
-            <span className="text-slate-600 dark:text-slate-400">
-              Already have an account?{' '}
-            </span>
+          <div className="mt-8 text-center">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-4 bg-white/80 dark:bg-slate-900/80 text-slate-500 dark:text-slate-400">
+                  Already have an account?
+                </span>
+              </div>
+            </div>
             <Link
               href="/login"
-              className="text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium transition-colors"
+              className="mt-4 inline-block text-[var(--primary)] hover:text-[var(--primary-dark)] font-semibold transition-colors"
             >
-              Sign in
+              Sign in to your account
             </Link>
           </div>
         </div>

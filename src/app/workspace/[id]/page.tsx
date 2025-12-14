@@ -120,7 +120,7 @@ export default function WorkspacePage() {
   const params = useParams();
   const router = useRouter();
   const workspaceId = params.id as string;
-  const workspace = workspaceData[workspaceId as keyof typeof workspaceData];
+  const workspace = workspaceData[1];
 
   const [activeSection, setActiveSection] = useState<SidebarItem>('getting-started');
   const [documentFilter, setDocumentFilter] = useState<'all' | 'completed' | 'in-progress' | 'unannotated'>('all');
@@ -311,7 +311,9 @@ export default function WorkspacePage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <Button className="w-full">Launch Editor</Button>
+                    <Button className="w-full" onClick={() => router.push(`/workspace/${workspaceId}/editor`)}>
+                      Launch Editor
+                    </Button>
                   </CardContent>
                 </Card>
 
@@ -341,7 +343,7 @@ export default function WorkspacePage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <Button variant="outline" className="w-full [&]:!text-slate-900 hover:[&]:!text-slate-900">Import</Button>
+                    <Button variant="outline" className="w-full">Import</Button>
                   </CardContent>
                 </Card>
 
@@ -455,7 +457,15 @@ export default function WorkspacePage() {
                             <Badge className={statusInfo.color}>
                               {statusInfo.label}
                             </Badge>
-                            <Button variant="ghost" size="sm" className="gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="gap-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/workspace/${workspaceId}/editor`);
+                              }}
+                            >
                               <Icons.play />
                               {doc.status === 'completed' ? 'View' : 'Annotate'}
                             </Button>

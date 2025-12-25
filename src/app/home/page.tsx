@@ -13,6 +13,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useAuth, useRequireAuth } from '@/lib/auth';
+import { LogOut, Settings, User } from 'lucide-react';
 
 // Mock data for recent workspaces
 const recentWorkspaces = [
@@ -97,11 +107,14 @@ const allWorkspaces = [
 
 export default function HomePage() {
   const router = useRouter();
+  const { user, logout, isLoading: authLoading } = useAuth();
+  const { isLoading: requireAuthLoading } = useRequireAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [isNewWorkspaceOpen, setIsNewWorkspaceOpen] = useState(false);
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceDescription, setWorkspaceDescription] = useState('');
   const [workspaceType, setWorkspaceType] = useState('');
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleCreateWorkspace = () => {
     // Handle workspace creation logic here
@@ -111,6 +124,46 @@ export default function HomePage() {
     setWorkspaceName('');
     setWorkspaceDescription('');
     setWorkspaceType('');
+  };
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  // Show loading while checking auth
+  if (authLoading || requireAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+        <div className="flex items-center gap-3">
+          <svg className="animate-spin h-8 w-8 text-[var(--primary)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span className="text-lg text-slate-600 dark:text-slate-400">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (!user) return 'U';
+    const first = user.firstName?.charAt(0) || '';
+    const last = user.lastName?.charAt(0) || '';
+    return (first + last).toUpperCase() || user.username?.charAt(0)?.toUpperCase() || 'U';
+  };
+
+  const getUserDisplayName = () => {
+    if (!user) return 'User';
+    if (user.firstName) {
+      return user.firstName + (user.lastName ? ' ' + user.lastName : '');
+    }
+    return user.username || 'User';
   };
 
   return (
@@ -135,12 +188,44 @@ export default function HomePage() {
               </svg>
               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
             </Button>
-            <Avatar className="cursor-pointer ring-2 ring-white dark:ring-slate-800 hover:shadow-lg transition-shadow">
-              <AvatarImage src="" alt="User avatar" />
-              <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
-                JD
-              </AvatarFallback>
-            </Avatar>
+
+            {/* User Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Avatar className="cursor-pointer ring-2 ring-white dark:ring-slate-800 hover:shadow-lg transition-shadow">
+                  <AvatarImage src="" alt={getUserDisplayName()} />
+                  <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
+                    {getUserInitials()}
+                  </AvatarFallback>
+                </Avatar>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">{getUserDisplayName()}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="cursor-pointer">
+                  <User className="mr-2 h-4 w-4" />
+                  <span>Profile</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer">
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>{isLoggingOut ? 'Logging out...' : 'Log out'}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
@@ -152,7 +237,7 @@ export default function HomePage() {
           <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between mb-8">
             <div>
               <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-3 tracking-tight">
-                Welcome back, John
+                Welcome back, {user?.firstName || user?.username || 'User'}
               </h2>
               <p className="text-slate-600 dark:text-slate-400 text-lg">
                 Continue your annotation work or start a new workspace
@@ -265,53 +350,53 @@ export default function HomePage() {
               {recentWorkspaces
                 .filter((workspace) => workspace.name.toLowerCase().includes(searchQuery.toLowerCase()))
                 .map((workspace) => (
-            <Card
-              key={workspace.id}
-              className="hover:shadow-xl hover:shadow-[var(--primary)]/10 transition-all duration-300 cursor-pointer group border-slate-200/60 dark:border-slate-800/60 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm hover:scale-[1.02] hover:border-[var(--primary)]/30"
-              onClick={() => router.push(`/workspace/${workspace.id}`)}
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--primary)] via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-[var(--primary)]/20">
-                    {workspace.name.charAt(0)}
-                  </div>
-                  <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
-                    <svg className="w-5 h-5 text-slate-400 hover:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                    </svg>
-                  </button>
-                </div>
-                <CardTitle className="text-lg font-bold">{workspace.name}</CardTitle>
-                <CardDescription className="text-sm">{workspace.type}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Progress Bar */}
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-slate-600 dark:text-slate-400 font-medium">Progress</span>
-                      <span className="font-bold text-[var(--primary)] dark:text-[var(--primary-light)]">{workspace.progress}%</span>
-                    </div>
-                    <div className="h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-[var(--primary)] to-purple-600 rounded-full transition-all duration-500 shadow-sm"
-                        style={{ width: `${workspace.progress}%` }}
-                      />
-                    </div>
-                  </div>
+                  <Card
+                    key={workspace.id}
+                    className="hover:shadow-xl hover:shadow-[var(--primary)]/10 transition-all duration-300 cursor-pointer group border-slate-200/60 dark:border-slate-800/60 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm hover:scale-[1.02] hover:border-[var(--primary)]/30"
+                    onClick={() => router.push(`/workspace/${workspace.id}`)}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--primary)] via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-[var(--primary)]/20">
+                          {workspace.name.charAt(0)}
+                        </div>
+                        <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                          <svg className="w-5 h-5 text-slate-400 hover:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                          </svg>
+                        </button>
+                      </div>
+                      <CardTitle className="text-lg font-bold">{workspace.name}</CardTitle>
+                      <CardDescription className="text-sm">{workspace.type}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {/* Progress Bar */}
+                        <div>
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="text-slate-600 dark:text-slate-400 font-medium">Progress</span>
+                            <span className="font-bold text-[var(--primary)] dark:text-[var(--primary-light)]">{workspace.progress}%</span>
+                          </div>
+                          <div className="h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-[var(--primary)] to-purple-600 rounded-full transition-all duration-500 shadow-sm"
+                              style={{ width: `${workspace.progress}%` }}
+                            />
+                          </div>
+                        </div>
 
-                  {/* Stats */}
-                  <div className="flex items-center justify-between text-sm pt-1">
-                    <span className="text-slate-600 dark:text-slate-400 font-medium">
-                      {workspace.annotated} / {workspace.documents} documents
-                    </span>
-                    <Badge variant="secondary" className="text-xs">
-                      {workspace.lastModified}
-                    </Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                        {/* Stats */}
+                        <div className="flex items-center justify-between text-sm pt-1">
+                          <span className="text-slate-600 dark:text-slate-400 font-medium">
+                            {workspace.annotated} / {workspace.documents} documents
+                          </span>
+                          <Badge variant="secondary" className="text-xs">
+                            {workspace.lastModified}
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
             </div>
 
@@ -340,53 +425,53 @@ export default function HomePage() {
               {allWorkspaces
                 .filter((workspace) => workspace.name.toLowerCase().includes(searchQuery.toLowerCase()))
                 .map((workspace) => (
-            <Card
-              key={workspace.id}
-              className="hover:shadow-xl hover:shadow-[var(--primary)]/10 transition-all duration-300 cursor-pointer group border-slate-200/60 dark:border-slate-800/60 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm hover:scale-[1.02] hover:border-[var(--primary)]/30"
-              onClick={() => router.push(`/workspace/${workspace.id}`)}
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--primary)] via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-[var(--primary)]/20">
-                    {workspace.name.charAt(0)}
-                  </div>
-                  <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
-                    <svg className="w-5 h-5 text-slate-400 hover:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                    </svg>
-                  </button>
-                </div>
-                <CardTitle className="text-lg font-bold">{workspace.name}</CardTitle>
-                <CardDescription className="text-sm">{workspace.type}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Progress Bar */}
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-slate-600 dark:text-slate-400 font-medium">Progress</span>
-                      <span className="font-bold text-[var(--primary)] dark:text-[var(--primary-light)]">{workspace.progress}%</span>
-                    </div>
-                    <div className="h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-[var(--primary)] to-purple-600 rounded-full transition-all duration-500 shadow-sm"
-                        style={{ width: `${workspace.progress}%` }}
-                      />
-                    </div>
-                  </div>
+                  <Card
+                    key={workspace.id}
+                    className="hover:shadow-xl hover:shadow-[var(--primary)]/10 transition-all duration-300 cursor-pointer group border-slate-200/60 dark:border-slate-800/60 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm hover:scale-[1.02] hover:border-[var(--primary)]/30"
+                    onClick={() => router.push(`/workspace/${workspace.id}`)}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--primary)] via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-[var(--primary)]/20">
+                          {workspace.name.charAt(0)}
+                        </div>
+                        <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                          <svg className="w-5 h-5 text-slate-400 hover:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                          </svg>
+                        </button>
+                      </div>
+                      <CardTitle className="text-lg font-bold">{workspace.name}</CardTitle>
+                      <CardDescription className="text-sm">{workspace.type}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {/* Progress Bar */}
+                        <div>
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="text-slate-600 dark:text-slate-400 font-medium">Progress</span>
+                            <span className="font-bold text-[var(--primary)] dark:text-[var(--primary-light)]">{workspace.progress}%</span>
+                          </div>
+                          <div className="h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-[var(--primary)] to-purple-600 rounded-full transition-all duration-500 shadow-sm"
+                              style={{ width: `${workspace.progress}%` }}
+                            />
+                          </div>
+                        </div>
 
-                  {/* Stats */}
-                  <div className="flex items-center justify-between text-sm pt-1">
-                    <span className="text-slate-600 dark:text-slate-400 font-medium">
-                      {workspace.annotated} / {workspace.documents} documents
-                    </span>
-                    <Badge variant="secondary" className="text-xs">
-                      {workspace.lastModified}
-                    </Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                        {/* Stats */}
+                        <div className="flex items-center justify-between text-sm pt-1">
+                          <span className="text-slate-600 dark:text-slate-400 font-medium">
+                            {workspace.annotated} / {workspace.documents} documents
+                          </span>
+                          <Badge variant="secondary" className="text-xs">
+                            {workspace.lastModified}
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
             </div>
 

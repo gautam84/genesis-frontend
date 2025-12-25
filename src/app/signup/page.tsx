@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,9 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { authApi, SignupRequest } from '@/lib/api';
 
 export default function SignUpPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
+    username: '',
     firstName: '',
     lastName: '',
     email: '',
@@ -27,6 +31,7 @@ export default function SignUpPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -35,6 +40,7 @@ export default function SignUpPage() {
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
     }
+    setApiError('');
   };
 
   const handleRoleChange = (value: string) => {
@@ -47,6 +53,11 @@ export default function SignUpPage() {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
+    if (!formData.username.trim()) {
+      newErrors.username = 'Username is required';
+    } else if (formData.username.length < 3) {
+      newErrors.username = 'Username must be at least 3 characters';
+    }
     if (!formData.firstName.trim()) {
       newErrors.firstName = 'First name is required';
     }
@@ -58,16 +69,10 @@ export default function SignUpPage() {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Invalid email format';
     }
-    if (!formData.organization.trim()) {
-      newErrors.organization = 'Organization is required';
-    }
-    if (!formData.role) {
-      newErrors.role = 'Please select a role';
-    }
     if (!formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
     }
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
@@ -85,16 +90,25 @@ export default function SignUpPage() {
     }
 
     setIsLoading(true);
+    setApiError('');
 
-    // TODO: Implement actual sign-up logic and email verification
-    console.log('Sign-up attempt:', formData);
+    try {
+      const signupData: SignupRequest = {
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        organizationName: formData.organization || undefined,
+      };
 
-    // Simulate API call
-    setTimeout(() => {
+      await authApi.signup(signupData);
+      router.push('/login?registered=true');
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
+    } finally {
       setIsLoading(false);
-      // TODO: Redirect to email verification page
-      alert('Registration successful! Please check your email for verification.');
-    }, 1500);
+    }
   };
 
   return (
@@ -130,7 +144,33 @@ export default function SignUpPage() {
             Get started with Genesis
           </h2>
 
+          {/* API Error Message */}
+          {apiError && (
+            <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-600 dark:text-red-400">{apiError}</p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Username */}
+            <div>
+              <Label htmlFor="username" className="text-slate-700 dark:text-slate-300 font-medium">
+                Username <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="username"
+                name="username"
+                type="text"
+                value={formData.username}
+                onChange={handleInputChange}
+                className={`h-11 rounded-xl ${errors.username ? 'border-red-500' : ''}`}
+                placeholder="johndoe"
+              />
+              {errors.username && (
+                <p className="text-sm text-red-500 mt-1">{errors.username}</p>
+              )}
+            </div>
+
             {/* Name Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -192,7 +232,7 @@ export default function SignUpPage() {
             {/* Organization */}
             <div>
               <Label htmlFor="organization" className="text-slate-700 dark:text-slate-300 font-medium">
-                Organization / Team <span className="text-red-500">*</span>
+                Organization / Team
               </Label>
               <Input
                 id="organization"
@@ -200,22 +240,19 @@ export default function SignUpPage() {
                 type="text"
                 value={formData.organization}
                 onChange={handleInputChange}
-                className={`h-11 rounded-xl ${errors.organization ? 'border-red-500' : ''}`}
-                placeholder="Your organization name"
+                className="h-11 rounded-xl"
+                placeholder="Your organization name (optional)"
               />
-              {errors.organization && (
-                <p className="text-sm text-red-500 mt-1">{errors.organization}</p>
-              )}
             </div>
 
             {/* Role */}
             <div>
               <Label htmlFor="role" className="text-slate-700 dark:text-slate-300 font-medium">
-                Role <span className="text-red-500">*</span>
+                Role
               </Label>
               <Select value={formData.role} onValueChange={handleRoleChange}>
-                <SelectTrigger className={`h-11 rounded-xl ${errors.role ? 'border-red-500' : ''}`}>
-                  <SelectValue placeholder="Select your role" />
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue placeholder="Select your role (optional)" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="annotator">Annotator</SelectItem>
@@ -225,9 +262,6 @@ export default function SignUpPage() {
                   <SelectItem value="researcher">Researcher</SelectItem>
                 </SelectContent>
               </Select>
-              {errors.role && (
-                <p className="text-sm text-red-500 mt-1">{errors.role}</p>
-              )}
             </div>
 
             {/* Password Fields */}
@@ -243,7 +277,7 @@ export default function SignUpPage() {
                   value={formData.password}
                   onChange={handleInputChange}
                   className={`h-11 rounded-xl ${errors.password ? 'border-red-500' : ''}`}
-                  placeholder="Min. 8 characters"
+                  placeholder="Min. 6 characters"
                 />
                 {errors.password && (
                   <p className="text-sm text-red-500 mt-1">{errors.password}</p>

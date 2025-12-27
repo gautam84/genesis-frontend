@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useAuth } from '@/lib/auth';
+import {
+  workspaceApi,
+  documentApi,
+  WorkspaceResponse,
+  DocumentResponse,
+  MemberResponse,
+  UpdateWorkspaceRequest,
+  MemberRole
+} from '@/lib/api';
+import { formatDistanceToNow } from 'date-fns';
 
 // Icons (using inline SVGs for now)
 const Icons = {
@@ -61,91 +83,222 @@ const Icons = {
   ),
 };
 
-// Mock workspace data
-const workspaceData = {
-  1: {
-    name: 'Customer Sentiment Analysis',
-    type: 'Sentiment Analysis',
-    description: 'Analyze customer feedback and reviews to understand sentiment patterns',
-    progress: 65,
-    documents: 245,
-    annotated: 159,
-    collaborators: [
-      { id: 1, name: 'John Doe', email: 'john@example.com', role: 'Admin', avatar: '' },
-      { id: 2, name: 'Jane Smith', email: 'jane@example.com', role: 'Annotator', avatar: '' },
-      { id: 3, name: 'Bob Wilson', email: 'bob@example.com', role: 'Annotator', avatar: '' },
-      { id: 4, name: 'Alice Brown', email: 'alice@example.com', role: 'Viewer', avatar: '' },
-    ],
-    documentsList: [
-      { id: 1, name: 'customer_review_001.txt', status: 'completed', annotator: 'Jane Smith', date: '2024-01-15', size: '2.3 KB' },
-      { id: 2, name: 'customer_review_002.txt', status: 'completed', annotator: 'Bob Wilson', date: '2024-01-15', size: '1.8 KB' },
-      { id: 3, name: 'customer_review_003.txt', status: 'in-progress', annotator: 'Jane Smith', date: '2024-01-16', size: '3.1 KB' },
-      { id: 4, name: 'customer_review_004.txt', status: 'unannotated', annotator: null, date: '2024-01-16', size: '2.7 KB' },
-      { id: 5, name: 'customer_review_005.txt', status: 'unannotated', annotator: null, date: '2024-01-16', size: '1.9 KB' },
-      { id: 6, name: 'customer_review_006.txt', status: 'completed', annotator: 'Bob Wilson', date: '2024-01-17', size: '2.1 KB' },
-      { id: 7, name: 'customer_review_007.txt', status: 'in-progress', annotator: 'Jane Smith', date: '2024-01-17', size: '2.5 KB' },
-      { id: 8, name: 'customer_review_008.txt', status: 'unannotated', annotator: null, date: '2024-01-17', size: '3.4 KB' },
-    ],
-    annotationLayers: [
-      {
-        id: 1,
-        name: 'Sentiment',
-        type: 'span',
-        description: 'Mark sentiment expressions in text',
-        labels: [
-          { id: 1, name: 'Positive', color: '#10b981', shortcut: 'P' },
-          { id: 2, name: 'Negative', color: '#ef4444', shortcut: 'N' },
-          { id: 3, name: 'Neutral', color: '#6b7280', shortcut: 'U' },
-          { id: 4, name: 'Mixed', color: '#f59e0b', shortcut: 'M' },
-        ],
-      },
-      {
-        id: 2,
-        name: 'Entities',
-        type: 'span',
-        description: 'Named entity recognition',
-        labels: [
-          { id: 5, name: 'Product', color: '#3b82f6', shortcut: 'R' },
-          { id: 6, name: 'Feature', color: '#8b5cf6', shortcut: 'F' },
-          { id: 7, name: 'Company', color: '#ec4899', shortcut: 'C' },
-        ],
-      },
-    ],
-  },
-};
-
 type SidebarItem = 'getting-started' | 'documents' | 'collaborators' | 'schema' | 'settings';
 
 export default function WorkspacePage() {
   const params = useParams();
   const router = useRouter();
   const workspaceId = params.id as string;
-  const workspace = workspaceData[1];
+  const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [workspace, setWorkspace] = useState<WorkspaceResponse | null>(null);
+  const [documents, setDocuments] = useState<DocumentResponse[]>([]);
+  const [members, setMembers] = useState<MemberResponse[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [activeSection, setActiveSection] = useState<SidebarItem>('getting-started');
   const [documentFilter, setDocumentFilter] = useState<'all' | 'completed' | 'in-progress' | 'unannotated'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Settings state
+  const [updatedName, setUpdatedName] = useState('');
+  const [updatedDescription, setUpdatedDescription] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Member management state
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState<MemberRole>('ANNOTATOR');
+  const [isAddingMember, setIsAddingMember] = useState(false);
+
+  useEffect(() => {
+    if (workspaceId && user) {
+      fetchData();
+    }
+  }, [workspaceId, user]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [wsRes, docRes, memRes] = await Promise.all([
+        workspaceApi.getById(workspaceId),
+        documentApi.list(workspaceId),
+        workspaceApi.getMembers(workspaceId)
+      ]);
+
+      setWorkspace(wsRes.data);
+      setDocuments(docRes.data);
+      setMembers(memRes.data);
+
+      setUpdatedName(wsRes.data.name);
+      setUpdatedDescription(wsRes.data.description || '');
+    } catch (error) {
+      console.error('Failed to fetch workspace data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateWorkspace = async () => {
+    if (!workspace) return;
+    try {
+      setIsUpdating(true);
+      const req: UpdateWorkspaceRequest = {
+        name: updatedName,
+        description: updatedDescription
+      };
+      const res = await workspaceApi.update(workspace.id, req);
+      setWorkspace(res.data);
+    } catch (error) {
+      console.error('Failed to update workspace:', error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleAddMember = async () => {
+    if (!newMemberEmail || !workspace) return;
+    try {
+      setIsAddingMember(true);
+      await workspaceApi.addMember(workspace.id, {
+        email: newMemberEmail,
+        role: newMemberRole
+      });
+      setIsAddMemberOpen(false);
+      setNewMemberEmail('');
+      setNewMemberRole('ANNOTATOR');
+      // Refresh members
+      const memRes = await workspaceApi.getMembers(workspace.id);
+      setMembers(memRes.data);
+    } catch (error) {
+      console.error('Failed to add member:', error);
+      alert('Failed to add member. Please check if the user exists and is not already a member.');
+    } finally {
+      setIsAddingMember(false);
+    }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!workspace || !confirm('Are you sure you want to remove this member?')) return;
+    try {
+      await workspaceApi.removeMember(workspace.id, userId);
+      setMembers(members.filter(m => m.userId !== userId));
+    } catch (error) {
+      console.error('Failed to remove member:', error);
+      alert('Failed to remove member.');
+    }
+  };
+
+  const handleUpdateRole = async (userId: string, newRole: MemberRole) => {
+    if (!workspace) return;
+    try {
+      await workspaceApi.updateMemberRole(workspace.id, userId, newRole);
+      setMembers(members.map(m => m.userId === userId ? { ...m, role: newRole } : m));
+    } catch (error) {
+      console.error('Failed to update role:', error);
+      alert('Failed to update role.');
+    }
+  };
+
+  const handleDeleteDocument = async (documentId: string) => {
+    if (!workspace || !confirm('Are you sure you want to delete this document?')) return;
+    try {
+      await documentApi.delete(documentId);
+      setDocuments(documents.filter(d => d.id !== documentId));
+      // Refresh workspace stats as document count changes
+      const wsRes = await workspaceApi.getById(workspace.id);
+      setWorkspace(wsRes.data);
+    } catch (error) {
+      console.error('Failed to delete document:', error);
+      alert('Failed to delete document.');
+    }
+  };
+
+  const handleDeleteWorkspace = async () => {
+    if (!workspace || !confirm(`Are you sure you want to delete workspace "${workspace.name}"? This action cannot be undone.`)) return;
+    try {
+      await workspaceApi.delete(workspace.id);
+      router.push('/home');
+    } catch (error) {
+      console.error('Failed to delete workspace:', error);
+      alert('Failed to delete workspace.');
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !workspace) return;
+
+    try {
+      setIsUploading(true);
+      await documentApi.upload(workspace.id, file);
+      // Refresh documents
+      const docRes = await documentApi.list(workspace.id);
+      setDocuments(docRes.data);
+
+      // Refresh workspace stats
+      const wsRes = await workspaceApi.getById(workspace.id);
+      setWorkspace(wsRes.data);
+    } catch (error) {
+      console.error('Failed to upload document:', error);
+    } finally {
+      setIsUploading(false);
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   // Filter documents
-  const filteredDocuments = workspace?.documentsList?.filter((doc) => {
-    const matchesFilter = documentFilter === 'all' || doc.status === documentFilter;
+  const filteredDocuments = documents.filter((doc) => {
+    // Basic status mapping - simplified for now
+    // In real app, you might map backend status string to these filter categories
+    const status = doc.status.toLowerCase(); // Backend: UPLOADED, IMPORTED, ANNOTATING, COMPLETE
+    let filterCategory = 'unannotated';
+    if (status === 'complete') filterCategory = 'completed';
+    else if (status === 'annotating') filterCategory = 'in-progress';
+    else filterCategory = 'unannotated';
+
+    const matchesFilter = documentFilter === 'all' || filterCategory === documentFilter;
     const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
-  }) || [];
+  });
 
   // Get status badge variant
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'COMPLETE':
         return { variant: 'default' as const, label: 'Completed', color: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' };
-      case 'in-progress':
+      case 'ANNOTATING':
         return { variant: 'secondary' as const, label: 'In Progress', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' };
-      case 'unannotated':
-        return { variant: 'secondary' as const, label: 'Unannotated', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' };
       default:
-        return { variant: 'secondary' as const, label: status, color: '' };
+        return { variant: 'secondary' as const, label: 'Unannotated', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' };
     }
   };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return 'Unknown logic';
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+        <div className="flex items-center gap-3">
+          <svg className="animate-spin h-8 w-8 text-[var(--primary)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span className="text-lg text-slate-600 dark:text-slate-400">Loading Workspace...</span>
+        </div>
+      </div>
+    );
+  }
 
   if (!workspace) {
     return (
@@ -175,7 +328,7 @@ export default function WorkspacePage() {
             />
             <div className="border-l border-slate-300 dark:border-slate-700 pl-8">
               <h1 className="text-lg font-bold text-slate-900 dark:text-white">{workspace.name}</h1>
-              <p className="text-sm text-slate-600 dark:text-slate-400">{workspace.type}</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{workspace.annotationType}</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -188,7 +341,7 @@ export default function WorkspacePage() {
             <Avatar className="cursor-pointer ring-2 ring-white dark:ring-slate-800 hover:shadow-lg transition-shadow">
               <AvatarImage src="" alt="User avatar" />
               <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
-                JD
+                {user?.firstName?.charAt(0) || user?.username?.charAt(0) || 'U'}
               </AvatarFallback>
             </Avatar>
           </div>
@@ -211,11 +364,10 @@ export default function WorkspacePage() {
             <nav className="space-y-1">
               <button
                 onClick={() => setActiveSection('getting-started')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${
-                  activeSection === 'getting-started'
-                    ? 'bg-[var(--primary)] text-white shadow-md'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'getting-started'
+                  ? 'bg-[var(--primary)] text-white shadow-md'
+                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
               >
                 <Icons.home />
                 <span className="font-medium">Getting Started</span>
@@ -223,11 +375,10 @@ export default function WorkspacePage() {
 
               <button
                 onClick={() => setActiveSection('documents')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${
-                  activeSection === 'documents'
-                    ? 'bg-[var(--primary)] text-white shadow-md'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'documents'
+                  ? 'bg-[var(--primary)] text-white shadow-md'
+                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
               >
                 <Icons.file />
                 <span className="font-medium">Documents</span>
@@ -235,11 +386,10 @@ export default function WorkspacePage() {
 
               <button
                 onClick={() => setActiveSection('collaborators')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${
-                  activeSection === 'collaborators'
-                    ? 'bg-[var(--primary)] text-white shadow-md'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'collaborators'
+                  ? 'bg-[var(--primary)] text-white shadow-md'
+                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
               >
                 <Icons.users />
                 <span className="font-medium">Collaborators</span>
@@ -247,11 +397,10 @@ export default function WorkspacePage() {
 
               <button
                 onClick={() => setActiveSection('schema')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${
-                  activeSection === 'schema'
-                    ? 'bg-[var(--primary)] text-white shadow-md'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'schema'
+                  ? 'bg-[var(--primary)] text-white shadow-md'
+                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
               >
                 <Icons.tag />
                 <span className="font-medium">Annotation Schema</span>
@@ -259,11 +408,10 @@ export default function WorkspacePage() {
 
               <button
                 onClick={() => setActiveSection('settings')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${
-                  activeSection === 'settings'
-                    ? 'bg-[var(--primary)] text-white shadow-md'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'settings'
+                  ? 'bg-[var(--primary)] text-white shadow-md'
+                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
               >
                 <Icons.settings />
                 <span className="font-medium">Settings</span>
@@ -277,25 +425,30 @@ export default function WorkspacePage() {
                 <div>
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-slate-600 dark:text-slate-400">Completion</span>
-                    <span className="font-bold text-[var(--primary)]">{workspace.progress}%</span>
+                    <span className="font-bold text-[var(--primary)]">{workspace.progressPercentage}%</span>
                   </div>
                   <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-[var(--primary)] to-purple-600 rounded-full"
-                      style={{ width: `${workspace.progress}%` }}
+                      style={{ width: `${workspace.progressPercentage}%` }}
                     />
                   </div>
                 </div>
                 <div className="text-xs text-slate-600 dark:text-slate-400">
-                  <p>{workspace.annotated} / {workspace.documents} documents</p>
+                  <p>{workspace.annotatedDocumentCount} / {workspace.documentCount} documents</p>
                 </div>
               </div>
             </div>
           </div>
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1 p-8">
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={handleFileUpload}
+          />
           {activeSection === 'getting-started' && (
             <div>
               <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Getting Started</h2>
@@ -343,7 +496,9 @@ export default function WorkspacePage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <Button variant="outline" className="w-full">Import</Button>
+                    <Button variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()}>
+                      Import
+                    </Button>
                   </CardContent>
                 </Card>
 
@@ -355,19 +510,19 @@ export default function WorkspacePage() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-slate-600 dark:text-slate-400">Total Documents</span>
-                        <span className="font-bold text-lg">{workspace.documents}</span>
+                        <span className="font-bold text-lg">{workspace.documentCount}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-slate-600 dark:text-slate-400">Annotated</span>
-                        <span className="font-bold text-lg text-green-600">{workspace.annotated}</span>
+                        <span className="font-bold text-lg text-green-600">{workspace.annotatedDocumentCount}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-slate-600 dark:text-slate-400">Remaining</span>
-                        <span className="font-bold text-lg text-orange-600">{workspace.documents - workspace.annotated}</span>
+                        <span className="font-bold text-lg text-orange-600">{workspace.documentCount - workspace.annotatedDocumentCount}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-slate-600 dark:text-slate-400">Team Members</span>
-                        <span className="font-bold text-lg">{workspace.collaborators.length}</span>
+                        <span className="font-bold text-lg">{members.length}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -380,9 +535,9 @@ export default function WorkspacePage() {
             <div>
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Documents</h2>
-                <Button className="gap-2">
+                <Button className="gap-2" onClick={() => fileInputRef.current?.click()}>
                   <Icons.upload />
-                  Upload Documents
+                  {isUploading ? 'Uploading...' : 'Upload Documents'}
                 </Button>
               </div>
 
@@ -441,15 +596,9 @@ export default function WorkspacePage() {
                                 {doc.name}
                               </p>
                               <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400 mt-1">
-                                <span>{doc.size}</span>
+                                <span>{formatFileSize(doc.fileSize)}</span>
                                 <span>•</span>
-                                <span>{doc.date}</span>
-                                {doc.annotator && (
-                                  <>
-                                    <span>•</span>
-                                    <span>{doc.annotator}</span>
-                                  </>
-                                )}
+                                <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
                               </div>
                             </div>
                           </div>
@@ -467,8 +616,38 @@ export default function WorkspacePage() {
                               }}
                             >
                               <Icons.play />
-                              {doc.status === 'completed' ? 'View' : 'Annotate'}
+                              {doc.status === 'COMPLETE' ? 'View' : 'Annotate'}
                             </Button>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                  </svg>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleDeleteDocument(doc.id)} className="text-red-600">
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                  </svg>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleDeleteDocument(doc.id)} className="text-red-600">
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </CardContent>
                       </Card>
@@ -481,29 +660,117 @@ export default function WorkspacePage() {
 
           {activeSection === 'collaborators' && (
             <div>
-              <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Collaborators</h2>
-              <div className="space-y-4">
-                {workspace.collaborators.map((collaborator) => (
-                  <Card key={collaborator.id}>
-                    <CardContent className="flex items-center justify-between p-6">
-                      <div className="flex items-center gap-4">
-                        <Avatar>
-                          <AvatarImage src={collaborator.avatar} alt={collaborator.name} />
-                          <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
-                            {collaborator.name.split(' ').map(n => n[0]).join('')}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-semibold text-slate-900 dark:text-white">{collaborator.name}</p>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">{collaborator.email}</p>
-                        </div>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Collaborators</h2>
+                <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="gap-2">
+                      <Icons.users />
+                      Add Member
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Member</DialogTitle>
+                      <DialogDescription>
+                        Invite a user to collaborate on this workspace.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email Address</Label>
+                        <Input
+                          id="email"
+                          placeholder="user@example.com"
+                          value={newMemberEmail}
+                          onChange={(e) => setNewMemberEmail(e.target.value)}
+                        />
                       </div>
-                      <Badge variant={collaborator.role === 'Admin' ? 'default' : 'secondary'}>
-                        {collaborator.role}
-                      </Badge>
+                      <div className="space-y-2">
+                        <Label htmlFor="role">Role</Label>
+                        <Select
+                          value={newMemberRole}
+                          onValueChange={(value) => setNewMemberRole(value as MemberRole)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ADMIN">Admin</SelectItem>
+                            <SelectItem value="CURATOR">Curator</SelectItem>
+                            <SelectItem value="ANNOTATOR">Annotator</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsAddMemberOpen(false)}>Cancel</Button>
+                      <Button onClick={handleAddMember} disabled={isAddingMember}>
+                        {isAddingMember ? 'Adding...' : 'Add Member'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              <div className="space-y-4">
+                {members.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <Icons.users />
+                      <p className="text-slate-600 dark:text-slate-400 mt-4">No collaborators yet</p>
                     </CardContent>
                   </Card>
-                ))}
+                ) : (
+                  members.map((member) => (
+                    <Card key={member.userId}>
+                      <CardContent className="flex items-center justify-between p-6">
+                        <div className="flex items-center gap-4">
+                          <Avatar>
+                            <AvatarImage src="" alt={member.username} />
+                            <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
+                              {member.firstName ? member.firstName.charAt(0) : member.username.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-semibold text-slate-900 dark:text-white">
+                              {member.firstName} {member.lastName} ({member.username})
+                            </p>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">{member.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <Select
+                            value={member.role}
+                            onValueChange={(value) => handleUpdateRole(member.userId, value as MemberRole)}
+                            disabled={user?.id === member.userId} // Cannot change own role here effectively
+                          >
+                            <SelectTrigger className="w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ADMIN">Admin</SelectItem>
+                              <SelectItem value="CURATOR">Curator</SelectItem>
+                              <SelectItem value="ANNOTATOR">Annotator</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            onClick={() => handleRemoveMember(member.userId)}
+                            disabled={user?.id === member.userId}
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -512,7 +779,7 @@ export default function WorkspacePage() {
             <div>
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Annotation Schema</h2>
-                <Button className="gap-2">
+                <Button className="gap-2" disabled>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
@@ -520,96 +787,19 @@ export default function WorkspacePage() {
                 </Button>
               </div>
 
-              <p className="text-slate-600 dark:text-slate-400 mb-6">
-                Define annotation layers and labels for your workspace. Each layer can have multiple labels with custom colors and keyboard shortcuts.
-              </p>
-
-              <div className="space-y-6">
-                {workspace.annotationLayers?.map((layer) => (
-                  <Card key={layer.id}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="flex items-center gap-2">
-                            {layer.name}
-                            <Badge variant="secondary" className="text-xs font-normal">
-                              {layer.type}
-                            </Badge>
-                          </CardTitle>
-                          <CardDescription className="mt-2">{layer.description}</CardDescription>
-                        </div>
-                        <Button variant="ghost" size="sm">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                          </svg>
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            Labels ({layer.labels.length})
-                          </h4>
-                          <Button variant="outline" size="sm" className="h-8 gap-1">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                            Add Label
-                          </Button>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {layer.labels.map((label) => (
-                            <div
-                              key={label.id}
-                              className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className="w-8 h-8 rounded-md"
-                                  style={{ backgroundColor: label.color }}
-                                />
-                                <div>
-                                  <p className="font-medium text-slate-900 dark:text-white">
-                                    {label.name}
-                                  </p>
-                                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    Shortcut: {label.shortcut}
-                                  </p>
-                                </div>
-                              </div>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-
-                {/* Empty State if no layers */}
-                {(!workspace.annotationLayers || workspace.annotationLayers.length === 0) && (
-                  <Card>
-                    <CardContent className="py-12 text-center">
-                      <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <Icons.tag />
-                      </div>
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-                        No annotation layers yet
-                      </h3>
-                      <p className="text-slate-600 dark:text-slate-400 mb-6">
-                        Create your first annotation layer to start defining labels for your workspace
-                      </p>
-                      <Button>Add Your First Layer</Button>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Icons.tag />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                    Coming Soon
+                  </h3>
+                  <p className="text-slate-600 dark:text-slate-400 mb-6">
+                    Advanced schema management will be available in the next update.
+                  </p>
+                </CardContent>
+              </Card>
             </div>
           )}
 
@@ -629,144 +819,54 @@ export default function WorkspacePage() {
                       <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                         Workspace Name
                       </label>
-                      <Input defaultValue={workspace.name} />
+                      <Input
+                        value={updatedName}
+                        onChange={(e) => setUpdatedName(e.target.value)}
+                      />
                     </div>
 
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                         Description
                       </label>
-                      <Input defaultValue={workspace.description} />
+                      <Input
+                        value={updatedDescription}
+                        onChange={(e) => setUpdatedDescription(e.target.value)}
+                      />
                     </div>
 
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                         Annotation Type
                       </label>
-                      <Input defaultValue={workspace.type} disabled className="bg-slate-100 dark:bg-slate-800" />
+                      <Input value={workspace.annotationType} disabled className="bg-slate-100 dark:bg-slate-800" />
                       <p className="text-xs text-slate-500">Annotation type cannot be changed after creation</p>
                     </div>
 
                     <div className="pt-4">
-                      <Button>Save Changes</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Export Settings */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Export Preferences</CardTitle>
-                    <CardDescription>Configure default export settings</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Default Export Format
-                      </label>
-                      <select className="w-full h-11 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-2 text-sm">
-                        <option>JSON</option>
-                        <option>CoNLL</option>
-                        <option>WebAnno TSV</option>
-                        <option>CSV</option>
-                        <option>UIMA CAS XMI</option>
-                      </select>
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                      <div>
-                        <p className="font-medium text-slate-900 dark:text-white">Include metadata</p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          Export document metadata along with annotations
-                        </p>
-                      </div>
-                      <input
-                        type="checkbox"
-                        className="w-5 h-5 rounded border-slate-300 text-[var(--primary)] focus:ring-[var(--primary)]"
-                        defaultChecked
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                      <div>
-                        <p className="font-medium text-slate-900 dark:text-white">Include annotator information</p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          Add annotator names and timestamps to exported data
-                        </p>
-                      </div>
-                      <input
-                        type="checkbox"
-                        className="w-5 h-5 rounded border-slate-300 text-[var(--primary)] focus:ring-[var(--primary)]"
-                        defaultChecked
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Collaboration Settings */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Collaboration</CardTitle>
-                    <CardDescription>Manage workspace permissions and access</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                      <div>
-                        <p className="font-medium text-slate-900 dark:text-white">Allow new members</p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          Members can invite others to this workspace
-                        </p>
-                      </div>
-                      <input
-                        type="checkbox"
-                        className="w-5 h-5 rounded border-slate-300 text-[var(--primary)] focus:ring-[var(--primary)]"
-                        defaultChecked
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                      <div>
-                        <p className="font-medium text-slate-900 dark:text-white">Require review</p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          Annotations must be reviewed before marking as complete
-                        </p>
-                      </div>
-                      <input
-                        type="checkbox"
-                        className="w-5 h-5 rounded border-slate-300 text-[var(--primary)] focus:ring-[var(--primary)]"
-                      />
+                      <Button onClick={handleUpdateWorkspace} disabled={isUpdating}>
+                        {isUpdating ? 'Saving...' : 'Save Changes'}
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
 
                 {/* Danger Zone */}
-                <Card className="border-red-200 dark:border-red-900">
+                <Card className="border-red-200 dark:border-red-900 mt-8">
                   <CardHeader>
                     <CardTitle className="text-red-600 dark:text-red-400">Danger Zone</CardTitle>
-                    <CardDescription>Irreversible actions</CardDescription>
+                    <CardDescription>Irreversible actions for this workspace</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between p-4 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/20">
+                  <CardContent>
+                    <div className="flex items-center justify-between p-4 border border-red-100 dark:border-red-900/50 rounded-lg bg-red-50 dark:bg-red-900/10">
                       <div>
-                        <p className="font-medium text-red-900 dark:text-red-200">Archive Workspace</p>
-                        <p className="text-sm text-red-700 dark:text-red-400">
-                          Archive this workspace and all its data
+                        <h4 className="font-medium text-red-900 dark:text-red-200">Delete Workspace</h4>
+                        <p className="text-sm text-red-700 dark:text-red-300">
+                          Permanently delete this workspace and all its documents
                         </p>
                       </div>
-                      <Button variant="outline" className="border-red-300 text-red-600 hover:bg-red-100 dark:border-red-800 dark:text-red-400">
-                        Archive
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/20">
-                      <div>
-                        <p className="font-medium text-red-900 dark:text-red-200">Delete Workspace</p>
-                        <p className="text-sm text-red-700 dark:text-red-400">
-                          Permanently delete this workspace and all annotations
-                        </p>
-                      </div>
-                      <Button variant="outline" className="border-red-300 text-red-600 hover:bg-red-100 dark:border-red-800 dark:text-red-400">
-                        Delete
+                      <Button variant="destructive" onClick={handleDeleteWorkspace}>
+                        Delete Workspace
                       </Button>
                     </div>
                   </CardContent>
@@ -775,7 +875,7 @@ export default function WorkspacePage() {
             </div>
           )}
         </main>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }

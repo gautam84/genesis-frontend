@@ -173,9 +173,9 @@ export default function WorkspacePage() {
       // Refresh members
       const memRes = await workspaceApi.getMembers(workspace.id);
       setMembers(memRes.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to add member:', error);
-      alert('Failed to add member. Please check if the user exists and is not already a member.');
+      alert(`Failed to add member: ${error.message || 'Unknown error'}`);
     } finally {
       setIsAddingMember(false);
     }
@@ -317,440 +317,387 @@ export default function WorkspacePage() {
   return (
     <AuthGuard>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      {/* Header */}
-      <header className="border-b border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <Image
-              src="/genesis-logo.svg"
-              alt="Genesis Logo"
-              width={120}
-              height={55}
-              priority
-              className="h-10 w-auto cursor-pointer"
-              onClick={() => router.push('/home')}
+        {/* Header */}
+        <header className="border-b border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-8">
+              <Image
+                src="/genesis-logo.svg"
+                alt="Genesis Logo"
+                width={120}
+                height={55}
+                priority
+                className="h-10 w-auto cursor-pointer"
+                onClick={() => router.push('/home')}
+              />
+              <div className="border-l border-slate-300 dark:border-slate-700 pl-8">
+                <h1 className="text-lg font-bold text-slate-900 dark:text-white">{workspace.name}</h1>
+                <p className="text-sm text-slate-600 dark:text-slate-400">{workspace.annotationType}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="icon" className="relative">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
+              </Button>
+              <Avatar className="cursor-pointer ring-2 ring-white dark:ring-slate-800 hover:shadow-lg transition-shadow">
+                <AvatarImage src="" alt="User avatar" />
+                <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
+                  {user?.firstName?.charAt(0) || user?.username?.charAt(0) || 'U'}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex max-w-7xl mx-auto">
+          {/* Sidebar */}
+          <aside className="w-64 border-r border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm min-h-[calc(100vh-73px)] sticky top-[73px]">
+            <div className="p-4">
+              <Button
+                variant="ghost"
+                className="w-full justify-start mb-6"
+                onClick={() => router.push('/home')}
+              >
+                <Icons.back />
+                <span className="ml-2">Back to Home</span>
+              </Button>
+
+              <nav className="space-y-1">
+                <button
+                  onClick={() => setActiveSection('getting-started')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'getting-started'
+                    ? 'bg-[var(--primary)] text-white shadow-md'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                >
+                  <Icons.home />
+                  <span className="font-medium">Getting Started</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveSection('documents')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'documents'
+                    ? 'bg-[var(--primary)] text-white shadow-md'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                >
+                  <Icons.file />
+                  <span className="font-medium">Documents</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveSection('collaborators')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'collaborators'
+                    ? 'bg-[var(--primary)] text-white shadow-md'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                >
+                  <Icons.users />
+                  <span className="font-medium">Collaborators</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveSection('schema')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'schema'
+                    ? 'bg-[var(--primary)] text-white shadow-md'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                >
+                  <Icons.tag />
+                  <span className="font-medium">Annotation Schema</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveSection('settings')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'settings'
+                    ? 'bg-[var(--primary)] text-white shadow-md'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                >
+                  <Icons.settings />
+                  <span className="font-medium">Settings</span>
+                </button>
+              </nav>
+
+              {/* Workspace Stats */}
+              <div className="mt-8 p-4 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Progress</h3>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-slate-600 dark:text-slate-400">Completion</span>
+                      <span className="font-bold text-[var(--primary)]">{workspace.progressPercentage}%</span>
+                    </div>
+                    <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-[var(--primary)] to-purple-600 rounded-full"
+                        style={{ width: `${workspace.progressPercentage}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">
+                    <p>{workspace.annotatedDocumentCount} / {workspace.documentCount} documents</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <main className="flex-1 p-8">
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleFileUpload}
             />
-            <div className="border-l border-slate-300 dark:border-slate-700 pl-8">
-              <h1 className="text-lg font-bold text-slate-900 dark:text-white">{workspace.name}</h1>
-              <p className="text-sm text-slate-600 dark:text-slate-400">{workspace.annotationType}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="relative">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
-            </Button>
-            <Avatar className="cursor-pointer ring-2 ring-white dark:ring-slate-800 hover:shadow-lg transition-shadow">
-              <AvatarImage src="" alt="User avatar" />
-              <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
-                {user?.firstName?.charAt(0) || user?.username?.charAt(0) || 'U'}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        </div>
-      </header>
-
-      <div className="flex max-w-7xl mx-auto">
-        {/* Sidebar */}
-        <aside className="w-64 border-r border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm min-h-[calc(100vh-73px)] sticky top-[73px]">
-          <div className="p-4">
-            <Button
-              variant="ghost"
-              className="w-full justify-start mb-6"
-              onClick={() => router.push('/home')}
-            >
-              <Icons.back />
-              <span className="ml-2">Back to Home</span>
-            </Button>
-
-            <nav className="space-y-1">
-              <button
-                onClick={() => setActiveSection('getting-started')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'getting-started'
-                  ? 'bg-[var(--primary)] text-white shadow-md'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-              >
-                <Icons.home />
-                <span className="font-medium">Getting Started</span>
-              </button>
-
-              <button
-                onClick={() => setActiveSection('documents')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'documents'
-                  ? 'bg-[var(--primary)] text-white shadow-md'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-              >
-                <Icons.file />
-                <span className="font-medium">Documents</span>
-              </button>
-
-              <button
-                onClick={() => setActiveSection('collaborators')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'collaborators'
-                  ? 'bg-[var(--primary)] text-white shadow-md'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-              >
-                <Icons.users />
-                <span className="font-medium">Collaborators</span>
-              </button>
-
-              <button
-                onClick={() => setActiveSection('schema')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'schema'
-                  ? 'bg-[var(--primary)] text-white shadow-md'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-              >
-                <Icons.tag />
-                <span className="font-medium">Annotation Schema</span>
-              </button>
-
-              <button
-                onClick={() => setActiveSection('settings')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'settings'
-                  ? 'bg-[var(--primary)] text-white shadow-md'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-              >
-                <Icons.settings />
-                <span className="font-medium">Settings</span>
-              </button>
-            </nav>
-
-            {/* Workspace Stats */}
-            <div className="mt-8 p-4 bg-slate-100 dark:bg-slate-800 rounded-lg">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Progress</h3>
-              <div className="space-y-3">
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-slate-600 dark:text-slate-400">Completion</span>
-                    <span className="font-bold text-[var(--primary)]">{workspace.progressPercentage}%</span>
-                  </div>
-                  <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-[var(--primary)] to-purple-600 rounded-full"
-                      style={{ width: `${workspace.progressPercentage}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="text-xs text-slate-600 dark:text-slate-400">
-                  <p>{workspace.annotatedDocumentCount} / {workspace.documentCount} documents</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        <main className="flex-1 p-8">
-          <input
-            type="file"
-            ref={fileInputRef}
-            className="hidden"
-            onChange={handleFileUpload}
-          />
-          {activeSection === 'getting-started' && (
-            <div>
-              <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Getting Started</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
-                  <CardHeader>
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--primary)] to-blue-600 flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform">
-                      <Icons.play />
-                    </div>
-                    <CardTitle>Open Editor</CardTitle>
-                    <CardDescription>
-                      Start annotating documents in the annotation editor
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button className="w-full" onClick={() => router.push(`/workspace/${workspaceId}/editor`)}>
-                      Launch Editor
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
-                  <CardHeader>
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform">
-                      <Icons.download />
-                    </div>
-                    <CardTitle>Export Documents</CardTitle>
-                    <CardDescription>
-                      Download annotated documents in various formats
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button variant="outline" className="w-full">Export</Button>
-                  </CardContent>
-                </Card>
-
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
-                  <CardHeader>
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform">
-                      <Icons.upload />
-                    </div>
-                    <CardTitle>Import Documents</CardTitle>
-                    <CardDescription>
-                      Upload new documents to this workspace
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()}>
-                      Import
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                <Card className="hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Quick Statistics</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 dark:text-slate-400">Total Documents</span>
-                        <span className="font-bold text-lg">{workspace.documentCount}</span>
+            {activeSection === 'getting-started' && (
+              <div>
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Getting Started</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
+                    <CardHeader>
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--primary)] to-blue-600 flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform">
+                        <Icons.play />
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 dark:text-slate-400">Annotated</span>
-                        <span className="font-bold text-lg text-green-600">{workspace.annotatedDocumentCount}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 dark:text-slate-400">Remaining</span>
-                        <span className="font-bold text-lg text-orange-600">{workspace.documentCount - workspace.annotatedDocumentCount}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 dark:text-slate-400">Team Members</span>
-                        <span className="font-bold text-lg">{members.length}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          )}
-
-          {activeSection === 'documents' && (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Documents</h2>
-                <Button className="gap-2" onClick={() => fileInputRef.current?.click()}>
-                  <Icons.upload />
-                  {isUploading ? 'Uploading...' : 'Upload Documents'}
-                </Button>
-              </div>
-
-              {/* Filters and Search */}
-              <div className="flex flex-col md:flex-row gap-4 mb-6">
-                <div className="flex-1">
-                  <div className="relative">
-                    <svg
-                      className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    <Input
-                      type="search"
-                      placeholder="Search documents..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-12 h-11"
-                    />
-                  </div>
-                </div>
-                <Tabs value={documentFilter} onValueChange={(value) => setDocumentFilter(value as typeof documentFilter)} className="w-auto">
-                  <TabsList>
-                    <TabsTrigger value="all">All</TabsTrigger>
-                    <TabsTrigger value="completed">Completed</TabsTrigger>
-                    <TabsTrigger value="in-progress">In Progress</TabsTrigger>
-                    <TabsTrigger value="unannotated">Unannotated</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </div>
-
-              {/* Documents List */}
-              <div className="space-y-3">
-                {filteredDocuments.length === 0 ? (
-                  <Card>
-                    <CardContent className="py-12 text-center">
-                      <Icons.file />
-                      <p className="text-slate-600 dark:text-slate-400 mt-4">No documents found</p>
+                      <CardTitle>Open Editor</CardTitle>
+                      <CardDescription>
+                        Start annotating documents in the annotation editor
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button className="w-full" onClick={() => router.push(`/workspace/${workspaceId}/editor`)}>
+                        Launch Editor
+                      </Button>
                     </CardContent>
                   </Card>
-                ) : (
-                  filteredDocuments.map((doc) => {
-                    const statusInfo = getStatusBadge(doc.status);
-                    return (
-                      <Card key={doc.id} className="hover:shadow-md transition-shadow">
-                        <CardContent className="flex items-center justify-between p-4">
-                          <div className="flex items-center gap-4 flex-1">
-                            <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                              <Icons.file />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-slate-900 dark:text-white truncate">
-                                {doc.name}
-                              </p>
-                              <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400 mt-1">
-                                <span>{formatFileSize(doc.fileSize)}</span>
-                                <span>•</span>
-                                <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
+
+                  <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
+                    <CardHeader>
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform">
+                        <Icons.download />
+                      </div>
+                      <CardTitle>Export Documents</CardTitle>
+                      <CardDescription>
+                        Download annotated documents in various formats
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button variant="outline" className="w-full">Export</Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
+                    <CardHeader>
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform">
+                        <Icons.upload />
+                      </div>
+                      <CardTitle>Import Documents</CardTitle>
+                      <CardDescription>
+                        Upload new documents to this workspace
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()}>
+                        Import
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="hover:shadow-lg transition-shadow">
+                    <CardHeader>
+                      <CardTitle className="text-lg">Quick Statistics</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Total Documents</span>
+                          <span className="font-bold text-lg">{workspace.documentCount}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Annotated</span>
+                          <span className="font-bold text-lg text-green-600">{workspace.annotatedDocumentCount}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Remaining</span>
+                          <span className="font-bold text-lg text-orange-600">{workspace.documentCount - workspace.annotatedDocumentCount}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Team Members</span>
+                          <span className="font-bold text-lg">{members.length}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'documents' && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Documents</h2>
+                  <Button className="gap-2" onClick={() => fileInputRef.current?.click()}>
+                    <Icons.upload />
+                    {isUploading ? 'Uploading...' : 'Upload Documents'}
+                  </Button>
+                </div>
+
+                {/* Filters and Search */}
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <svg
+                        className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      <Input
+                        type="search"
+                        placeholder="Search documents..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-12 h-11"
+                      />
+                    </div>
+                  </div>
+                  <Tabs value={documentFilter} onValueChange={(value) => setDocumentFilter(value as typeof documentFilter)} className="w-auto">
+                    <TabsList>
+                      <TabsTrigger value="all">All</TabsTrigger>
+                      <TabsTrigger value="completed">Completed</TabsTrigger>
+                      <TabsTrigger value="in-progress">In Progress</TabsTrigger>
+                      <TabsTrigger value="unannotated">Unannotated</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+
+                {/* Documents List */}
+                <div className="space-y-3">
+                  {filteredDocuments.length === 0 ? (
+                    <Card>
+                      <CardContent className="py-12 text-center">
+                        <Icons.file />
+                        <p className="text-slate-600 dark:text-slate-400 mt-4">No documents found</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    filteredDocuments.map((doc) => {
+                      const statusInfo = getStatusBadge(doc.status);
+                      return (
+                        <Card key={doc.id} className="hover:shadow-md transition-shadow">
+                          <CardContent className="flex items-center justify-between p-4">
+                            <div className="flex items-center gap-4 flex-1">
+                              <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                                <Icons.file />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-slate-900 dark:text-white truncate">
+                                  {doc.name}
+                                </p>
+                                <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400 mt-1">
+                                  <span>{formatFileSize(doc.fileSize)}</span>
+                                  <span>•</span>
+                                  <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <Badge className={statusInfo.color}>
-                              {statusInfo.label}
-                            </Badge>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="gap-2"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/workspace/${workspaceId}/editor`);
-                              }}
-                            >
-                              <Icons.play />
-                              {doc.status === 'COMPLETE' ? 'View' : 'Annotate'}
-                            </Button>
+                            <div className="flex items-center gap-3">
+                              <Badge className={statusInfo.color}>
+                                {statusInfo.label}
+                              </Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-2"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/workspace/${workspaceId}/editor`);
+                                }}
+                              >
+                                <Icons.play />
+                                {doc.status === 'COMPLETE' ? 'View' : 'Annotate'}
+                              </Button>
 
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                  </svg>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleDeleteDocument(doc.id)} className="text-red-600">
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                    </svg>
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleDeleteDocument(doc.id)} className="text-red-600">
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
 
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                  </svg>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleDeleteDocument(doc.id)} className="text-red-600">
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })
-                )}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                    </svg>
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleDeleteDocument(doc.id)} className="text-red-600">
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {activeSection === 'collaborators' && (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Collaborators</h2>
-                <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="gap-2">
-                      <Icons.users />
-                      Add Member
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Add New Member</DialogTitle>
-                      <DialogDescription>
-                        Invite a user to collaborate on this workspace.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email Address</Label>
-                        <Input
-                          id="email"
-                          placeholder="user@example.com"
-                          value={newMemberEmail}
-                          onChange={(e) => setNewMemberEmail(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="role">Role</Label>
-                        <Select
-                          value={newMemberRole}
-                          onValueChange={(value) => setNewMemberRole(value as MemberRole)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="ADMIN">Admin</SelectItem>
-                            <SelectItem value="CURATOR">Curator</SelectItem>
-                            <SelectItem value="ANNOTATOR">Annotator</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsAddMemberOpen(false)}>Cancel</Button>
-                      <Button onClick={handleAddMember} disabled={isAddingMember}>
-                        {isAddingMember ? 'Adding...' : 'Add Member'}
+            {activeSection === 'collaborators' && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Collaborators</h2>
+                  <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="gap-2">
+                        <Icons.users />
+                        Add Member
                       </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-
-              <div className="space-y-4">
-                {members.length === 0 ? (
-                  <Card>
-                    <CardContent className="py-12 text-center">
-                      <Icons.users />
-                      <p className="text-slate-600 dark:text-slate-400 mt-4">No collaborators yet</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  members.map((member) => (
-                    <Card key={member.userId}>
-                      <CardContent className="flex items-center justify-between p-6">
-                        <div className="flex items-center gap-4">
-                          <Avatar>
-                            <AvatarImage src="" alt={member.username} />
-                            <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
-                              {member.firstName ? member.firstName.charAt(0) : member.username.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-semibold text-slate-900 dark:text-white">
-                              {member.firstName} {member.lastName} ({member.username})
-                            </p>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">{member.email}</p>
-                          </div>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Add New Member</DialogTitle>
+                        <DialogDescription>
+                          Invite a user to collaborate on this workspace.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="email">Email Address</Label>
+                          <Input
+                            id="email"
+                            placeholder="user@example.com"
+                            value={newMemberEmail}
+                            onChange={(e) => setNewMemberEmail(e.target.value)}
+                          />
                         </div>
-                        <div className="flex items-center gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="role">Role</Label>
                           <Select
-                            value={member.role}
-                            onValueChange={(value) => handleUpdateRole(member.userId, value as MemberRole)}
-                            disabled={user?.id === member.userId} // Cannot change own role here effectively
+                            value={newMemberRole}
+                            onValueChange={(value) => setNewMemberRole(value as MemberRole)}
                           >
-                            <SelectTrigger className="w-[130px]">
-                              <SelectValue />
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a role" />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="ADMIN">Admin</SelectItem>
@@ -758,131 +705,184 @@ export default function WorkspacePage() {
                               <SelectItem value="ANNOTATOR">Annotator</SelectItem>
                             </SelectContent>
                           </Select>
-
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            onClick={() => handleRemoveMember(member.userId)}
-                            disabled={user?.id === member.userId}
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </Button>
                         </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAddMemberOpen(false)}>Cancel</Button>
+                        <Button onClick={handleAddMember} disabled={isAddingMember}>
+                          {isAddingMember ? 'Adding...' : 'Add Member'}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+
+                <div className="space-y-4">
+                  {members.length === 0 ? (
+                    <Card>
+                      <CardContent className="py-12 text-center">
+                        <Icons.users />
+                        <p className="text-slate-600 dark:text-slate-400 mt-4">No collaborators yet</p>
                       </CardContent>
                     </Card>
-                  ))
-                )}
+                  ) : (
+                    members.map((member) => (
+                      <Card key={member.userId}>
+                        <CardContent className="flex items-center justify-between p-6">
+                          <div className="flex items-center gap-4">
+                            <Avatar>
+                              <AvatarImage src="" alt={member.username} />
+                              <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
+                                {member.firstName ? member.firstName.charAt(0) : member.username.charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-semibold text-slate-900 dark:text-white">
+                                {member.firstName} {member.lastName} ({member.username})
+                              </p>
+                              <p className="text-sm text-slate-600 dark:text-slate-400">{member.email}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <Select
+                              value={member.role}
+                              onValueChange={(value) => handleUpdateRole(member.userId, value as MemberRole)}
+                              disabled={user?.id === member.userId} // Cannot change own role here effectively
+                            >
+                              <SelectTrigger className="w-[130px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="ADMIN">Admin</SelectItem>
+                                <SelectItem value="CURATOR">Curator</SelectItem>
+                                <SelectItem value="ANNOTATOR">Annotator</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              onClick={() => handleRemoveMember(member.userId)}
+                              disabled={user?.id === member.userId}
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {activeSection === 'schema' && (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Annotation Schema</h2>
-                <Button className="gap-2" disabled>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Layer
-                </Button>
-              </div>
+            {activeSection === 'schema' && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Annotation Schema</h2>
+                  <Button className="gap-2" disabled>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Layer
+                  </Button>
+                </div>
 
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <Icons.tag />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-                    Coming Soon
-                  </h3>
-                  <p className="text-slate-600 dark:text-slate-400 mb-6">
-                    Advanced schema management will be available in the next update.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {activeSection === 'settings' && (
-            <div>
-              <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Settings</h2>
-
-              <div className="space-y-6">
-                {/* General Settings */}
                 <Card>
-                  <CardHeader>
-                    <CardTitle>General</CardTitle>
-                    <CardDescription>Basic workspace configuration</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Workspace Name
-                      </label>
-                      <Input
-                        value={updatedName}
-                        onChange={(e) => setUpdatedName(e.target.value)}
-                      />
+                  <CardContent className="py-12 text-center">
+                    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <Icons.tag />
                     </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Description
-                      </label>
-                      <Input
-                        value={updatedDescription}
-                        onChange={(e) => setUpdatedDescription(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Annotation Type
-                      </label>
-                      <Input value={workspace.annotationType} disabled className="bg-slate-100 dark:bg-slate-800" />
-                      <p className="text-xs text-slate-500">Annotation type cannot be changed after creation</p>
-                    </div>
-
-                    <div className="pt-4">
-                      <Button onClick={handleUpdateWorkspace} disabled={isUpdating}>
-                        {isUpdating ? 'Saving...' : 'Save Changes'}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Danger Zone */}
-                <Card className="border-red-200 dark:border-red-900 mt-8">
-                  <CardHeader>
-                    <CardTitle className="text-red-600 dark:text-red-400">Danger Zone</CardTitle>
-                    <CardDescription>Irreversible actions for this workspace</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between p-4 border border-red-100 dark:border-red-900/50 rounded-lg bg-red-50 dark:bg-red-900/10">
-                      <div>
-                        <h4 className="font-medium text-red-900 dark:text-red-200">Delete Workspace</h4>
-                        <p className="text-sm text-red-700 dark:text-red-300">
-                          Permanently delete this workspace and all its documents
-                        </p>
-                      </div>
-                      <Button variant="destructive" onClick={handleDeleteWorkspace}>
-                        Delete Workspace
-                      </Button>
-                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                      Coming Soon
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400 mb-6">
+                      Advanced schema management will be available in the next update.
+                    </p>
                   </CardContent>
                 </Card>
               </div>
-            </div>
-          )}
-        </main>
+            )}
+
+            {activeSection === 'settings' && (
+              <div>
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Settings</h2>
+
+                <div className="space-y-6">
+                  {/* General Settings */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>General</CardTitle>
+                      <CardDescription>Basic workspace configuration</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          Workspace Name
+                        </label>
+                        <Input
+                          value={updatedName}
+                          onChange={(e) => setUpdatedName(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          Description
+                        </label>
+                        <Input
+                          value={updatedDescription}
+                          onChange={(e) => setUpdatedDescription(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          Annotation Type
+                        </label>
+                        <Input value={workspace.annotationType} disabled className="bg-slate-100 dark:bg-slate-800" />
+                        <p className="text-xs text-slate-500">Annotation type cannot be changed after creation</p>
+                      </div>
+
+                      <div className="pt-4">
+                        <Button onClick={handleUpdateWorkspace} disabled={isUpdating}>
+                          {isUpdating ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Danger Zone */}
+                  <Card className="border-red-200 dark:border-red-900 mt-8">
+                    <CardHeader>
+                      <CardTitle className="text-red-600 dark:text-red-400">Danger Zone</CardTitle>
+                      <CardDescription>Irreversible actions for this workspace</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between p-4 border border-red-100 dark:border-red-900/50 rounded-lg bg-red-50 dark:bg-red-900/10">
+                        <div>
+                          <h4 className="font-medium text-red-900 dark:text-red-200">Delete Workspace</h4>
+                          <p className="text-sm text-red-700 dark:text-red-300">
+                            Permanently delete this workspace and all its documents
+                          </p>
+                        </div>
+                        <Button variant="destructive" onClick={handleDeleteWorkspace}>
+                          Delete Workspace
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+          </main>
+        </div >
       </div >
-    </div >
-      </div>
-      </div>
-    </AuthGuard>
+    </div>
+      </div >
+    </AuthGuard >
   );
 }

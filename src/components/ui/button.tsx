@@ -15,7 +15,7 @@ const buttonVariants = cva(
         outline: "border-2 border-[var(--border)] bg-white text-slate-900 hover:bg-[var(--surface)] hover:text-white dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700",
         secondary:
           "bg-[var(--surface-dark)] text-slate-900 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-700 dark:text-slate-50 dark:hover:bg-slate-600 dark:hover:text-slate-50",
-        ghost: "text-slate-900 hover:bg-[var(--surface-dark)] hover:text-slate-900 dark:text-slate-50 dark:hover:bg-slate-800 dark:hover:text-slate-50",
+        ghost: "bg-white text-slate-900 hover:bg-[var(--surface)] hover:text-white dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700",
         link: "text-[var(--primary)] underline-offset-4 hover:underline hover:text-[var(--primary-dark)]",
       },
       size: {

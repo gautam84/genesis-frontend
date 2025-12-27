@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -22,108 +22,66 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth, useRequireAuth } from '@/lib/auth';
+import { workspaceApi, WorkspaceResponse, AnnotationType, CreateWorkspaceRequest } from '@/lib/api';
 import { LogOut, Settings, User } from 'lucide-react';
-
-// Mock data for recent workspaces
-const recentWorkspaces = [
-  {
-    id: 1,
-    name: 'Customer Sentiment Analysis',
-    type: 'Sentiment Analysis',
-    lastModified: '2 hours ago',
-    progress: 65,
-    documents: 245,
-    annotated: 159,
-  },
-  {
-    id: 2,
-    name: 'Medical Entity Recognition',
-    type: 'Named Entity Recognition',
-    lastModified: 'Yesterday',
-    progress: 42,
-    documents: 180,
-    annotated: 76,
-  },
-  {
-    id: 3,
-    name: 'Legal Document Classification',
-    type: 'Text Classification',
-    lastModified: '3 days ago',
-    progress: 88,
-    documents: 420,
-    annotated: 370,
-  },
-  {
-    id: 4,
-    name: 'News Relation Extraction',
-    type: 'Relation Extraction',
-    lastModified: '1 week ago',
-    progress: 25,
-    documents: 500,
-    annotated: 125,
-  },
-];
-
-// Mock data for all workspaces (includes more workspaces)
-const allWorkspaces = [
-  ...recentWorkspaces,
-  {
-    id: 5,
-    name: 'Social Media Monitor',
-    type: 'Sentiment Analysis',
-    lastModified: '2 weeks ago',
-    progress: 55,
-    documents: 300,
-    annotated: 165,
-  },
-  {
-    id: 6,
-    name: 'Product Review Analysis',
-    type: 'Text Classification',
-    lastModified: '3 weeks ago',
-    progress: 70,
-    documents: 150,
-    annotated: 105,
-  },
-  {
-    id: 7,
-    name: 'Research Paper Extraction',
-    type: 'Relation Extraction',
-    lastModified: '1 month ago',
-    progress: 30,
-    documents: 200,
-    annotated: 60,
-  },
-  {
-    id: 8,
-    name: 'Email Classification',
-    type: 'Text Classification',
-    lastModified: '1 month ago',
-    progress: 45,
-    documents: 350,
-    annotated: 158,
-  },
-];
+import { formatDistanceToNow } from 'date-fns';
 
 export default function HomePage() {
   const router = useRouter();
   const { user, logout, isLoading: authLoading } = useAuth();
   const { isLoading: requireAuthLoading } = useRequireAuth();
+  const [workspaces, setWorkspaces] = useState<WorkspaceResponse[]>([]);
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isNewWorkspaceOpen, setIsNewWorkspaceOpen] = useState(false);
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceDescription, setWorkspaceDescription] = useState('');
-  const [workspaceType, setWorkspaceType] = useState('');
+  const [workspaceType, setWorkspaceType] = useState<string>('');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
-  const handleCreateWorkspace = () => {
-    // Handle workspace creation logic here
-    console.log('Creating workspace:', { workspaceName, workspaceDescription, workspaceType });
-    setIsNewWorkspaceOpen(false);
-    // Reset form
-    setWorkspaceName('');
-    setWorkspaceDescription('');
-    setWorkspaceType('');
+  useEffect(() => {
+    if (user) {
+      loadWorkspaces();
+    }
+  }, [user]);
+
+  const loadWorkspaces = async () => {
+    try {
+      setLoadingWorkspaces(true);
+      const response = await workspaceApi.list();
+      setWorkspaces(response.data);
+    } catch (error) {
+      console.error('Failed to load workspaces:', error);
+    } finally {
+      setLoadingWorkspaces(false);
+    }
+  };
+
+  const handleCreateWorkspace = async () => {
+    if (!workspaceName || !workspaceType) return;
+
+    try {
+      setIsCreating(true);
+      const request: CreateWorkspaceRequest = {
+        name: workspaceName,
+        description: workspaceDescription,
+        annotationType: workspaceType as AnnotationType,
+      };
+
+      await workspaceApi.create(request);
+      await loadWorkspaces();
+      setIsNewWorkspaceOpen(false);
+
+      // Reset form
+      setWorkspaceName('');
+      setWorkspaceDescription('');
+      setWorkspaceType('');
+    } catch (error) {
+      console.error('Failed to create workspace:', error);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -165,6 +123,64 @@ export default function HomePage() {
     }
     return user.username || 'User';
   };
+
+  const filteredWorkspaces = workspaces.filter((workspace) =>
+    workspace.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const recentWorkspaces = [...workspaces]
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 4);
+
+  const renderWorkspaceCard = (workspace: WorkspaceResponse) => (
+    <Card
+      key={workspace.id}
+      className="hover:shadow-xl hover:shadow-[var(--primary)]/10 transition-all duration-300 cursor-pointer group border-slate-200/60 dark:border-slate-800/60 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm hover:scale-[1.02] hover:border-[var(--primary)]/30"
+      onClick={() => router.push(`/workspace/${workspace.id}`)}
+    >
+      <CardHeader>
+        <div className="flex items-start justify-between mb-3">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--primary)] via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-[var(--primary)]/20">
+            {workspace.name.charAt(0).toUpperCase()}
+          </div>
+          <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+            <svg className="w-5 h-5 text-slate-400 hover:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+            </svg>
+          </button>
+        </div>
+        <CardTitle className="text-lg font-bold">{workspace.name}</CardTitle>
+        <CardDescription className="text-sm">{workspace.annotationType}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {/* Progress Bar */}
+          <div>
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-slate-600 dark:text-slate-400 font-medium">Progress</span>
+              <span className="font-bold text-[var(--primary)] dark:text-[var(--primary-light)]">{workspace.progressPercentage}%</span>
+            </div>
+            <div className="h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[var(--primary)] to-purple-600 rounded-full transition-all duration-500 shadow-sm"
+                style={{ width: `${workspace.progressPercentage}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="flex items-center justify-between text-sm pt-1">
+            <span className="text-slate-600 dark:text-slate-400 font-medium">
+              {workspace.annotatedDocumentCount} / {workspace.documentCount} documents
+            </span>
+            <Badge variant="secondary" className="text-xs">
+              Updated {new Date(workspace.updatedAt).toLocaleDateString()}
+            </Badge>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
@@ -295,11 +311,9 @@ export default function HomePage() {
                           <SelectValue placeholder="Select annotation type" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="ner">Named Entity Recognition</SelectItem>
-                          <SelectItem value="sentiment">Sentiment Analysis</SelectItem>
-                          <SelectItem value="classification">Text Classification</SelectItem>
-                          <SelectItem value="relation">Relation Extraction</SelectItem>
-                          <SelectItem value="custom">Custom Annotation</SelectItem>
+                          <SelectItem value="COREF">Coreference Resolution</SelectItem>
+                          <SelectItem value="NER">Named Entity Recognition</SelectItem>
+                          <SelectItem value="POS">Part-of-Speech Tagging</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -308,8 +322,8 @@ export default function HomePage() {
                     <Button variant="outline" onClick={() => setIsNewWorkspaceOpen(false)}>
                       Cancel
                     </Button>
-                    <Button onClick={handleCreateWorkspace} disabled={!workspaceName || !workspaceType}>
-                      Create Workspace
+                    <Button onClick={handleCreateWorkspace} disabled={!workspaceName || !workspaceType || isCreating}>
+                      {isCreating ? 'Creating...' : 'Create Workspace'}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -345,152 +359,71 @@ export default function HomePage() {
           </TabsList>
 
           <TabsContent value="recent">
-            {/* Workspaces Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {recentWorkspaces
-                .filter((workspace) => workspace.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                .map((workspace) => (
-                  <Card
-                    key={workspace.id}
-                    className="hover:shadow-xl hover:shadow-[var(--primary)]/10 transition-all duration-300 cursor-pointer group border-slate-200/60 dark:border-slate-800/60 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm hover:scale-[1.02] hover:border-[var(--primary)]/30"
-                    onClick={() => router.push(`/workspace/${workspace.id}`)}
-                  >
-                    <CardHeader>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--primary)] via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-[var(--primary)]/20">
-                          {workspace.name.charAt(0)}
-                        </div>
-                        <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
-                          <svg className="w-5 h-5 text-slate-400 hover:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                          </svg>
-                        </button>
-                      </div>
-                      <CardTitle className="text-lg font-bold">{workspace.name}</CardTitle>
-                      <CardDescription className="text-sm">{workspace.type}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {/* Progress Bar */}
-                        <div>
-                          <div className="flex justify-between text-sm mb-2">
-                            <span className="text-slate-600 dark:text-slate-400 font-medium">Progress</span>
-                            <span className="font-bold text-[var(--primary)] dark:text-[var(--primary-light)]">{workspace.progress}%</span>
-                          </div>
-                          <div className="h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-[var(--primary)] to-purple-600 rounded-full transition-all duration-500 shadow-sm"
-                              style={{ width: `${workspace.progress}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Stats */}
-                        <div className="flex items-center justify-between text-sm pt-1">
-                          <span className="text-slate-600 dark:text-slate-400 font-medium">
-                            {workspace.annotated} / {workspace.documents} documents
-                          </span>
-                          <Badge variant="secondary" className="text-xs">
-                            {workspace.lastModified}
-                          </Badge>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+            {loadingWorkspaces ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i} className="animate-pulse h-[200px] bg-slate-100 dark:bg-slate-800 border-none" />
                 ))}
-            </div>
-
-            {/* Empty State */}
-            {recentWorkspaces.filter((workspace) => workspace.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
-              <div className="text-center py-16">
-                <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
-                  <svg className="w-10 h-10 text-[var(--primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                  No workspaces found
-                </h3>
-                <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md mx-auto">
-                  Try adjusting your search or create a new workspace to get started
-                </p>
-                <Button size="lg">Create New Workspace</Button>
               </div>
+            ) : (
+              <>
+                {/* Recent Workspaces Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {recentWorkspaces.map(renderWorkspaceCard)}
+                </div>
+
+                {/* Empty State */}
+                {recentWorkspaces.length === 0 && (
+                  <div className="text-center py-16">
+                    <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
+                      <svg className="w-10 h-10 text-[var(--primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                      No recent workspaces
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md mx-auto">
+                      Start working on a workspace and it will appear here
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
 
           <TabsContent value="all">
-            {/* Workspaces Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {allWorkspaces
-                .filter((workspace) => workspace.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                .map((workspace) => (
-                  <Card
-                    key={workspace.id}
-                    className="hover:shadow-xl hover:shadow-[var(--primary)]/10 transition-all duration-300 cursor-pointer group border-slate-200/60 dark:border-slate-800/60 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm hover:scale-[1.02] hover:border-[var(--primary)]/30"
-                    onClick={() => router.push(`/workspace/${workspace.id}`)}
-                  >
-                    <CardHeader>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--primary)] via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-[var(--primary)]/20">
-                          {workspace.name.charAt(0)}
-                        </div>
-                        <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
-                          <svg className="w-5 h-5 text-slate-400 hover:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                          </svg>
-                        </button>
-                      </div>
-                      <CardTitle className="text-lg font-bold">{workspace.name}</CardTitle>
-                      <CardDescription className="text-sm">{workspace.type}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {/* Progress Bar */}
-                        <div>
-                          <div className="flex justify-between text-sm mb-2">
-                            <span className="text-slate-600 dark:text-slate-400 font-medium">Progress</span>
-                            <span className="font-bold text-[var(--primary)] dark:text-[var(--primary-light)]">{workspace.progress}%</span>
-                          </div>
-                          <div className="h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-[var(--primary)] to-purple-600 rounded-full transition-all duration-500 shadow-sm"
-                              style={{ width: `${workspace.progress}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Stats */}
-                        <div className="flex items-center justify-between text-sm pt-1">
-                          <span className="text-slate-600 dark:text-slate-400 font-medium">
-                            {workspace.annotated} / {workspace.documents} documents
-                          </span>
-                          <Badge variant="secondary" className="text-xs">
-                            {workspace.lastModified}
-                          </Badge>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+            {loadingWorkspaces ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i} className="animate-pulse h-[200px] bg-slate-100 dark:bg-slate-800 border-none" />
                 ))}
-            </div>
-
-            {/* Empty State */}
-            {allWorkspaces.filter((workspace) => workspace.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
-              <div className="text-center py-16">
-                <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
-                  <svg className="w-10 h-10 text-[var(--primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                  No workspaces found
-                </h3>
-                <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md mx-auto">
-                  Try adjusting your search or create a new workspace to get started
-                </p>
-                <Button size="lg">Create New Workspace</Button>
               </div>
+            ) : (
+              <>
+                {/* Workspaces Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredWorkspaces.map(renderWorkspaceCard)}
+                </div>
+
+                {/* Empty State */}
+                {filteredWorkspaces.length === 0 && (
+                  <div className="text-center py-16">
+                    <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
+                      <svg className="w-10 h-10 text-[var(--primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                      No workspaces found
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md mx-auto">
+                      Try adjusting your search or create a new workspace to get started
+                    </p>
+                    <Button size="lg" onClick={() => setIsNewWorkspaceOpen(true)}>Create New Workspace</Button>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
         </Tabs>

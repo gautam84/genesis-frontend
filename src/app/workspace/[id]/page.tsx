@@ -881,8 +881,8 @@ export default function WorkspacePage() {
           </main>
         </div >
       </div >
-    </div>
-      </div >
+  
+
     </AuthGuard >
   );
 }

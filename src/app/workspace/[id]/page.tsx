@@ -98,6 +98,10 @@ export default function WorkspacePage() {
   const [members, setMembers] = useState<MemberResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Computed role for current user
+  const currentUserRole = members.find(m => m.userId === user?.id)?.role;
+  const isAdmin = currentUserRole === 'ADMIN';
+
   const [activeSection, setActiveSection] = useState<SidebarItem>('getting-started');
   const [documentFilter, setDocumentFilter] = useState<'all' | 'completed' | 'in-progress' | 'unannotated'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -410,16 +414,18 @@ export default function WorkspacePage() {
                   <span className="font-medium">Annotation Schema</span>
                 </button>
 
-                <button
-                  onClick={() => setActiveSection('settings')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'settings'
-                    ? 'bg-[var(--primary)] text-white shadow-md'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                >
-                  <Icons.settings />
-                  <span className="font-medium">Settings</span>
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => setActiveSection('settings')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'settings'
+                      ? 'bg-[var(--primary)] text-white shadow-md'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                  >
+                    <Icons.settings />
+                    <span className="font-medium">Settings</span>
+                  </button>
+                )}
               </nav>
 
               {/* Workspace Stats */}
@@ -666,55 +672,57 @@ export default function WorkspacePage() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Collaborators</h2>
-                  <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="gap-2">
-                        <Icons.users />
-                        Add Member
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Add New Member</DialogTitle>
-                        <DialogDescription>
-                          Invite a user to collaborate on this workspace.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="email">Email Address</Label>
-                          <Input
-                            id="email"
-                            placeholder="user@example.com"
-                            value={newMemberEmail}
-                            onChange={(e) => setNewMemberEmail(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="role">Role</Label>
-                          <Select
-                            value={newMemberRole}
-                            onValueChange={(value) => setNewMemberRole(value as MemberRole)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="ADMIN">Admin</SelectItem>
-                              <SelectItem value="CURATOR">Curator</SelectItem>
-                              <SelectItem value="ANNOTATOR">Annotator</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsAddMemberOpen(false)}>Cancel</Button>
-                        <Button onClick={handleAddMember} disabled={isAddingMember}>
-                          {isAddingMember ? 'Adding...' : 'Add Member'}
+                  {isAdmin && (
+                    <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+                      <DialogTrigger asChild>
+                        <Button className="gap-2">
+                          <Icons.users />
+                          Add Member
                         </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add New Member</DialogTitle>
+                          <DialogDescription>
+                            Invite a user to collaborate on this workspace.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="email">Email Address</Label>
+                            <Input
+                              id="email"
+                              placeholder="user@example.com"
+                              value={newMemberEmail}
+                              onChange={(e) => setNewMemberEmail(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="role">Role</Label>
+                            <Select
+                              value={newMemberRole}
+                              onValueChange={(value) => setNewMemberRole(value as MemberRole)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a role" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="ADMIN">Admin</SelectItem>
+                                <SelectItem value="CURATOR">Curator</SelectItem>
+                                <SelectItem value="ANNOTATOR">Annotator</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setIsAddMemberOpen(false)}>Cancel</Button>
+                          <Button onClick={handleAddMember} disabled={isAddingMember}>
+                            {isAddingMember ? 'Adding...' : 'Add Member'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  )}
                 </div>
 
                 <div className="space-y-4">
@@ -747,7 +755,7 @@ export default function WorkspacePage() {
                             <Select
                               value={member.role}
                               onValueChange={(value) => handleUpdateRole(member.userId, value as MemberRole)}
-                              disabled={user?.id === member.userId} // Cannot change own role here effectively
+                              disabled={!isAdmin || user?.id === member.userId}
                             >
                               <SelectTrigger className="w-[130px]">
                                 <SelectValue />
@@ -759,17 +767,19 @@ export default function WorkspacePage() {
                               </SelectContent>
                             </Select>
 
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                              onClick={() => handleRemoveMember(member.userId)}
-                              disabled={user?.id === member.userId}
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </Button>
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                onClick={() => handleRemoveMember(member.userId)}
+                                disabled={user?.id === member.userId}
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </Button>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
@@ -807,7 +817,7 @@ export default function WorkspacePage() {
               </div>
             )}
 
-            {activeSection === 'settings' && (
+            {activeSection === 'settings' && isAdmin && (
               <div>
                 <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Settings</h2>
 
@@ -881,7 +891,7 @@ export default function WorkspacePage() {
           </main>
         </div >
       </div >
-  
+
 
     </AuthGuard >
   );

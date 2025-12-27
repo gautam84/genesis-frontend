@@ -46,7 +46,7 @@ export interface ApiResponse<T> {
 export interface ApiError {
     success: boolean;
     message: string;
-    errors?: Record<string, string>;
+    fieldErrors?: Record<string, string[]>;
 }
 
 // Token storage keys
@@ -128,6 +128,14 @@ async function fetchWithAuth<T>(
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ message: 'Request failed' }));
+
+        if (error.fieldErrors) {
+            const fieldErrorMessages = Object.entries(error.fieldErrors)
+                .map(([field, msgs]) => `${field}: ${(msgs as string[]).join(', ')}`)
+                .join('; ');
+            throw new Error(`${error.message || 'Validation failed'}: ${fieldErrorMessages}`);
+        }
+
         throw new Error(error.message || `Request failed with status ${response.status}`);
     }
 

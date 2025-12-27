@@ -56,9 +56,9 @@ export default function LoginPage() {
               className="h-20 w-auto"
             />
           </div>
-          <p className="text-slate-600 dark:text-slate-400 text-base">
+          {/* <p className="text-slate-600 dark:text-slate-400 text-base">
             NLP Annotation Platform
-          </p>
+          </p> */}
         </div>
 
         {/* Login Card */}
@@ -167,10 +167,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-8">
-          Protected by enterprise-grade security
-        </p>
+
       </div>
     </div>
   );

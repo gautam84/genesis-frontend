@@ -223,4 +223,339 @@ export const authApi = {
     },
 };
 
+// Workspace and Document types
+export interface WorkspaceResponse {
+    id: string;
+    name: string;
+    description?: string;
+    annotationType: string;
+    status: string;
+    ownerId: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+// Annotation type enum matching backend
+export type AnnotationType = 'COREF' | 'NER' | 'POS';
+
+export interface CreateWorkspaceRequest {
+    name: string;
+    description?: string;
+    annotationType: AnnotationType;
+}
+
+export interface DocumentResponse {
+    id: string;
+    name: string;
+    orderIndex: number;
+    status: string;
+    workspaceId: string;
+    tokenStartIndex?: number;
+    tokenEndIndex?: number;
+    storedFileUrl?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+// Coreference annotation types
+export interface ClusterResponse {
+    id: string;
+    workspaceId: string;
+    clusterIndex: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface MentionResponse {
+    id: string;
+    clusterId: string;
+    tokenStartIndex: number;
+    tokenEndIndex: number;
+    text: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CreateMentionRequest {
+    tokenStartIndex: number;
+    tokenEndIndex: number;
+}
+
+export interface TokenInfo {
+    tokenIndex: number;
+    text: string;
+    startOffset: number;
+    endOffset: number;
+}
+
+// Workspace API functions
+export const workspaceApi = {
+    /**
+     * Create a new workspace
+     */
+    create: async (data: CreateWorkspaceRequest): Promise<ApiResponse<WorkspaceResponse>> => {
+        return fetchWithAuth<ApiResponse<WorkspaceResponse>>('/api/workspaces', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    /**
+     * Get workspace by ID
+     */
+    getById: async (id: string): Promise<ApiResponse<WorkspaceResponse>> => {
+        return fetchWithAuth<ApiResponse<WorkspaceResponse>>(`/api/workspaces/${id}`);
+    },
+
+    /**
+     * List all workspaces for current user
+     */
+    list: async (): Promise<ApiResponse<WorkspaceResponse[]>> => {
+        return fetchWithAuth<ApiResponse<WorkspaceResponse[]>>('/api/workspaces');
+    },
+
+    /**
+     * Update workspace status
+     */
+    updateStatus: async (id: string, status: string): Promise<ApiResponse<WorkspaceResponse>> => {
+        return fetchWithAuth<ApiResponse<WorkspaceResponse>>(`/api/workspaces/${id}/status?status=${status}`, {
+            method: 'PUT',
+        });
+    },
+
+    /**
+     * Delete a workspace
+     */
+    delete: async (id: string): Promise<ApiResponse<void>> => {
+        return fetchWithAuth<ApiResponse<void>>(`/api/workspaces/${id}`, {
+            method: 'DELETE',
+        });
+    },
+};
+
+// Document API functions
+export const documentApi = {
+    /**
+     * Upload a document to a workspace
+     */
+    upload: async (workspaceId: string, file: File): Promise<ApiResponse<DocumentResponse>> => {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const accessToken = tokenStorage.getAccessToken();
+        const headers: HeadersInit = {};
+        if (accessToken) {
+            (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/documents`, {
+            method: 'POST',
+            headers,
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ message: 'Upload failed' }));
+            throw new Error(error.message || 'Upload failed');
+        }
+
+        return response.json();
+    },
+
+    /**
+     * List documents in a workspace
+     */
+    list: async (workspaceId: string): Promise<ApiResponse<DocumentResponse[]>> => {
+        return fetchWithAuth<ApiResponse<DocumentResponse[]>>(`/api/workspaces/${workspaceId}/documents`);
+    },
+
+    /**
+     * Get document by ID
+     */
+    getById: async (id: string): Promise<ApiResponse<DocumentResponse>> => {
+        return fetchWithAuth<ApiResponse<DocumentResponse>>(`/api/documents/${id}`);
+    },
+
+    /**
+     * Update document status
+     */
+    updateStatus: async (id: string, status: string): Promise<ApiResponse<DocumentResponse>> => {
+        return fetchWithAuth<ApiResponse<DocumentResponse>>(`/api/documents/${id}/status?status=${status}`, {
+            method: 'PUT',
+        });
+    },
+
+    /**
+     * Delete a document
+     */
+    delete: async (id: string): Promise<ApiResponse<void>> => {
+        return fetchWithAuth<ApiResponse<void>>(`/api/documents/${id}`, {
+            method: 'DELETE',
+        });
+    },
+};
+
+// Tokenization API functions
+export const tokenizationApi = {
+    /**
+     * Tokenize a document
+     */
+    tokenizeDocument: async (documentId: string): Promise<ApiResponse<number>> => {
+        return fetchWithAuth<ApiResponse<number>>(`/api/tokenization/documents/${documentId}`, {
+            method: 'POST',
+        });
+    },
+
+    /**
+     * Tokenize all documents in a workspace
+     */
+    tokenizeWorkspace: async (workspaceId: string): Promise<ApiResponse<number>> => {
+        return fetchWithAuth<ApiResponse<number>>(`/api/tokenization/workspaces/${workspaceId}`, {
+            method: 'POST',
+        });
+    },
+
+    /**
+     * Get token count for a document
+     */
+    getTokenCount: async (documentId: string): Promise<ApiResponse<number>> => {
+        return fetchWithAuth<ApiResponse<number>>(`/api/tokenization/documents/${documentId}/count`);
+    },
+};
+
+// Coreference annotation API functions
+export const corefApi = {
+    /**
+     * Create a new cluster in a workspace
+     */
+    createCluster: async (workspaceId: string): Promise<ApiResponse<ClusterResponse>> => {
+        return fetchWithAuth<ApiResponse<ClusterResponse>>(`/api/coref/workspaces/${workspaceId}/clusters`, {
+            method: 'POST',
+        });
+    },
+
+    /**
+     * Get all clusters for a workspace
+     */
+    getClusters: async (workspaceId: string): Promise<ApiResponse<ClusterResponse[]>> => {
+        return fetchWithAuth<ApiResponse<ClusterResponse[]>>(`/api/coref/workspaces/${workspaceId}/clusters`);
+    },
+
+    /**
+     * Add a mention to a cluster
+     */
+    addMention: async (clusterId: string, data: CreateMentionRequest): Promise<ApiResponse<MentionResponse>> => {
+        return fetchWithAuth<ApiResponse<MentionResponse>>(`/api/coref/clusters/${clusterId}/mentions`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    /**
+     * Get all mentions for a cluster
+     */
+    getMentions: async (clusterId: string): Promise<ApiResponse<MentionResponse[]>> => {
+        return fetchWithAuth<ApiResponse<MentionResponse[]>>(`/api/coref/clusters/${clusterId}/mentions`);
+    },
+
+    /**
+     * Delete a mention
+     */
+    deleteMention: async (mentionId: string): Promise<ApiResponse<void>> => {
+        return fetchWithAuth<ApiResponse<void>>(`/api/coref/mentions/${mentionId}`, {
+            method: 'DELETE',
+        });
+    },
+
+    /**
+     * Delete a cluster and all its mentions
+     */
+    deleteCluster: async (clusterId: string): Promise<ApiResponse<void>> => {
+        return fetchWithAuth<ApiResponse<void>>(`/api/coref/clusters/${clusterId}`, {
+            method: 'DELETE',
+        });
+    },
+
+    /**
+     * Delete all annotations for a workspace
+     */
+    deleteAllAnnotations: async (workspaceId: string): Promise<ApiResponse<void>> => {
+        return fetchWithAuth<ApiResponse<void>>(`/api/coref/workspaces/${workspaceId}/annotations`, {
+            method: 'DELETE',
+        });
+    },
+};
+
+// Import/Export API functions
+export const importExportApi = {
+    /**
+     * Import CoNLL-2012 file
+     */
+    importCoNLL: async (workspaceId: string, documentId: string, file: File): Promise<ApiResponse<Record<string, number>>> => {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const accessToken = tokenStorage.getAccessToken();
+        const headers: HeadersInit = {};
+        if (accessToken) {
+            (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/import-export/workspaces/${workspaceId}/documents/${documentId}/conll`, {
+            method: 'POST',
+            headers,
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ message: 'Import failed' }));
+            throw new Error(error.message || 'Import failed');
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Export document to CoNLL-2012 format
+     */
+    exportDocumentToCoNLL: async (documentId: string): Promise<Blob> => {
+        const accessToken = tokenStorage.getAccessToken();
+        const headers: HeadersInit = {};
+        if (accessToken) {
+            (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/import-export/documents/${documentId}/conll`, {
+            headers,
+        });
+
+        if (!response.ok) {
+            throw new Error('Export failed');
+        }
+
+        return response.blob();
+    },
+
+    /**
+     * Export workspace to CoNLL-2012 format
+     */
+    exportWorkspaceToCoNLL: async (workspaceId: string): Promise<Blob> => {
+        const accessToken = tokenStorage.getAccessToken();
+        const headers: HeadersInit = {};
+        if (accessToken) {
+            (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/import-export/workspaces/${workspaceId}/conll`, {
+            headers,
+        });
+
+        if (!response.ok) {
+            throw new Error('Export failed');
+        }
+
+        return response.blob();
+    },
+};
+
 export default authApi;

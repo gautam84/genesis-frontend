@@ -133,9 +133,7 @@ export default function SignUpPage() {
               className="h-20 w-auto"
             />
           </div>
-          <p className="text-slate-600 dark:text-slate-400 text-base">
-            Create your NLP Annotation account
-          </p>
+ 
         </div>
 
         {/* Sign-up Card */}

@@ -24,7 +24,7 @@ import {
 import { useAuth, useRequireAuth } from '@/lib/auth';
 import { workspaceApi, WorkspaceResponse, AnnotationType, CreateWorkspaceRequest } from '@/lib/api';
 import { LogOut, Settings, User, MoreVertical, Trash, AlertTriangle } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, isToday, isYesterday, subDays, isAfter, format } from 'date-fns';
 
 export default function HomePage() {
   const router = useRouter();
@@ -140,6 +140,29 @@ export default function HomePage() {
     return user.username || 'User';
   };
 
+  const formatLastUpdated = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+
+    // If today, show relative time (e.g., "5 minutes ago")
+    if (isToday(date)) {
+      return formatDistanceToNow(date, { addSuffix: true });
+    }
+
+    // If yesterday, show "Yesterday"
+    if (isYesterday(date)) {
+      return 'Yesterday';
+    }
+
+    // If less than 7 days ago (or whatever threshold), show relative (e.g. "3 days ago")
+    if (isAfter(date, subDays(now, 7))) {
+      return formatDistanceToNow(date, { addSuffix: true });
+    }
+
+    // Otherwise show standard date
+    return format(date, 'MMM d, yyyy');
+  };
+
   const filteredWorkspaces = workspaces.filter((workspace) =>
     workspace.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -210,7 +233,7 @@ export default function HomePage() {
               {workspace.annotatedDocumentCount} / {workspace.documentCount} documents
             </span>
             <Badge variant="secondary" className="text-xs">
-              Updated {new Date(workspace.updatedAt).toLocaleDateString()}
+              Updated {formatLastUpdated(workspace.updatedAt)}
             </Badge>
           </div>
         </div>

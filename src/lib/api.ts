@@ -98,10 +98,17 @@ async function fetchWithAuth<T>(
         (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
-        headers,
-    });
+    let response: Response;
+    try {
+        response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            ...options,
+            headers,
+        });
+    } catch (networkError: any) {
+        // Network error - server might not be running
+        console.error(`Network error calling ${endpoint}:`, networkError);
+        throw new Error(`Cannot connect to server. Make sure the backend is running on ${API_BASE_URL}`);
+    }
 
     // Handle 401 - try to refresh token
     if (response.status === 401 && tokenStorage.getRefreshToken()) {
@@ -127,7 +134,7 @@ async function fetchWithAuth<T>(
     }
 
     if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Request failed' }));
+        const error = await response.json().catch(() => ({ message: `Request to ${endpoint} failed with status ${response.status}` }));
 
         if (error.fieldErrors) {
             const fieldErrorMessages = Object.entries(error.fieldErrors)
@@ -136,7 +143,12 @@ async function fetchWithAuth<T>(
             throw new Error(`${error.message || 'Validation failed'}: ${fieldErrorMessages}`);
         }
 
-        throw new Error(error.message || `Request failed with status ${response.status}`);
+        throw new Error(error.message || `Request to ${endpoint} failed with status ${response.status}`);
+    }
+
+    // Handle 204 No Content responses (e.g., DELETE operations)
+    if (response.status === 204) {
+        return undefined as T;
     }
 
     return response.json();
@@ -291,36 +303,122 @@ export interface DocumentResponse {
     updatedAt: string;
 }
 
-// Coreference annotation types
-export interface ClusterResponse {
+// ==================== Editor Types ====================
+
+// Token and Sentence types (matching backend DTOs)
+export interface TokenDto {
     id: string;
-    workspaceId: string;
-    clusterIndex: number;
-    createdAt: string;
-    updatedAt: string;
-}
-
-export interface MentionResponse {
-    id: string;
-    clusterId: string;
-    tokenStartIndex: number;
-    tokenEndIndex: number;
-    text: string;
-    createdAt: string;
-    updatedAt: string;
-}
-
-export interface CreateMentionRequest {
-    tokenStartIndex: number;
-    tokenEndIndex: number;
-}
-
-export interface TokenInfo {
+    documentId: string;
     tokenIndex: number;
-    text: string;
+    sentenceIndex: number;
+    globalIndex: number;
+    form: string;  // The actual token text
+    text?: string; // Legacy alias
+    pos: string | null;
+    lemma: string | null;
+    nerTag: string | null;
     startOffset: number;
     endOffset: number;
 }
+
+export interface SentenceDto {
+    sentenceIndex: number;
+    startTokenIndex: number;
+    endTokenIndex: number;
+    tokens: TokenDto[];
+}
+
+// Editor response types
+export interface DocumentContentResponse {
+    documentId: string;
+    documentName: string;
+    orderIndex: number;
+    sentences: SentenceDto[];
+    tokens: TokenDto[];
+    totalSentences: number;
+    totalTokens: number;
+    globalTokenOffset: number;
+}
+
+export interface EditorDocumentInfo {
+    id: string;
+    name: string;
+    orderIndex: number;
+    tokenCount: number;
+    sentenceCount: number;
+    status: string;
+    isTokenized: boolean;
+}
+
+export interface EditorSessionResponse {
+    id?: string;
+    workspaceId: string;
+    userId: string;
+    lastDocumentIndex: number;  // Changed from currentDocumentIndex to match backend
+    scrollPosition: number;
+}
+
+export interface WorkspaceEditorResponse {
+    workspaceId: string;
+    workspaceName: string;
+    annotationType: string;
+    documents: EditorDocumentInfo[];
+    session: EditorSessionResponse | null;
+    totalDocuments: number;
+    totalTokens: number;
+    totalSentences: number;
+}
+
+export interface SaveSessionRequest {
+    workspaceId: string;
+    lastDocumentIndex: number;  // Changed from documentIndex to match backend
+    scrollPosition: number;
+}
+
+// ==================== Coreference Types ====================
+
+export interface ClusterDto {
+    id: string;
+    workspaceId: string;
+    clusterNumber: number;
+    label: string | null;
+    representativeText: string | null;
+    color: string;
+    mentionCount: number;
+}
+
+export interface MentionDto {
+    id: string;
+    workspaceId: string;
+    documentId: string;
+    clusterId: string | null;
+    clusterNumber: number | null;
+    sentenceIndex: number;
+    startTokenIndex: number;
+    endTokenIndex: number;
+    globalStartIndex: number;
+    globalEndIndex: number;
+    text: string;
+    mentionType: string | null;
+    clusterColor: string | null;
+}
+
+export interface CreateMentionRequest {
+    documentId: string;
+    sentenceIndex: number;
+    startTokenIndex: number;
+    endTokenIndex: number;
+    text: string;
+}
+
+export interface CreateClusterRequest {
+    label?: string;
+    color?: string;
+}
+
+// Legacy types for backwards compatibility
+export interface ClusterResponse extends ClusterDto { }
+export interface MentionResponse extends MentionDto { }
 
 // Workspace API functions
 export const workspaceApi = {
@@ -493,66 +591,203 @@ export const tokenizationApi = {
     },
 };
 
-// Coreference annotation API functions
-export const corefApi = {
+// ==================== Editor API ====================
+
+export const editorApi = {
     /**
-     * Create a new cluster in a workspace
+     * Open a workspace in the editor
      */
-    createCluster: async (workspaceId: string): Promise<ApiResponse<ClusterResponse>> => {
-        return fetchWithAuth<ApiResponse<ClusterResponse>>(`/api/coref/workspaces/${workspaceId}/clusters`, {
+    openWorkspace: async (workspaceId: string): Promise<ApiResponse<WorkspaceEditorResponse>> => {
+        return fetchWithAuth<ApiResponse<WorkspaceEditorResponse>>(`/api/editor/workspaces/${workspaceId}/open`, {
             method: 'POST',
         });
     },
 
     /**
-     * Get all clusters for a workspace
+     * Get all documents for a workspace with token counts
      */
-    getClusters: async (workspaceId: string): Promise<ApiResponse<ClusterResponse[]>> => {
-        return fetchWithAuth<ApiResponse<ClusterResponse[]>>(`/api/coref/workspaces/${workspaceId}/clusters`);
+    getWorkspaceDocuments: async (workspaceId: string): Promise<ApiResponse<EditorDocumentInfo[]>> => {
+        return fetchWithAuth<ApiResponse<EditorDocumentInfo[]>>(`/api/editor/workspaces/${workspaceId}/documents`);
     },
 
     /**
-     * Add a mention to a cluster
+     * Get document content with tokens for display
      */
-    addMention: async (clusterId: string, data: CreateMentionRequest): Promise<ApiResponse<MentionResponse>> => {
-        return fetchWithAuth<ApiResponse<MentionResponse>>(`/api/coref/clusters/${clusterId}/mentions`, {
+    getDocumentContent: async (documentId: string): Promise<ApiResponse<DocumentContentResponse>> => {
+        return fetchWithAuth<ApiResponse<DocumentContentResponse>>(`/api/editor/documents/${documentId}/content`);
+    },
+
+    /**
+     * Get document content with workspace-level token offset
+     */
+    getDocumentContentWithOffset: async (workspaceId: string, documentId: string): Promise<ApiResponse<DocumentContentResponse>> => {
+        return fetchWithAuth<ApiResponse<DocumentContentResponse>>(`/api/editor/workspaces/${workspaceId}/documents/${documentId}/content`);
+    },
+
+    /**
+     * Get current session state
+     */
+    getSession: async (workspaceId: string): Promise<ApiResponse<EditorSessionResponse>> => {
+        return fetchWithAuth<ApiResponse<EditorSessionResponse>>(`/api/editor/workspaces/${workspaceId}/session`);
+    },
+
+    /**
+     * Save session state
+     */
+    saveSession: async (request: SaveSessionRequest): Promise<ApiResponse<EditorSessionResponse>> => {
+        return fetchWithAuth<ApiResponse<EditorSessionResponse>>('/api/editor/session', {
+            method: 'POST',
+            body: JSON.stringify(request),
+            keepalive: true, // Ensure save completes on page navigation
+        });
+    },
+
+    /**
+     * Close/clear session
+     */
+    closeSession: async (workspaceId: string): Promise<void> => {
+        await fetchWithAuth(`/api/editor/workspaces/${workspaceId}/session`, {
+            method: 'DELETE',
+        });
+    },
+
+    /**
+     * Tokenize a document
+     */
+    tokenizeDocument: async (documentId: string): Promise<ApiResponse<{ documentId: string; sentenceCount: number; tokenCount: number; success: boolean }>> => {
+        return fetchWithAuth(`/api/editor/documents/${documentId}/tokenize`, {
+            method: 'POST',
+        });
+    },
+};
+
+// ==================== Coreference API ====================
+
+export const corefApi = {
+    // ==================== Mention Endpoints ====================
+
+    /**
+     * Create a new mention
+     */
+    createMention: async (workspaceId: string, data: CreateMentionRequest): Promise<ApiResponse<MentionDto>> => {
+        return fetchWithAuth<ApiResponse<MentionDto>>(`/api/workspaces/${workspaceId}/mentions`, {
             method: 'POST',
             body: JSON.stringify(data),
         });
     },
 
     /**
-     * Get all mentions for a cluster
+     * Get all mentions for a workspace
      */
-    getMentions: async (clusterId: string): Promise<ApiResponse<MentionResponse[]>> => {
-        return fetchWithAuth<ApiResponse<MentionResponse[]>>(`/api/coref/clusters/${clusterId}/mentions`);
+    getMentionsByWorkspace: async (workspaceId: string): Promise<ApiResponse<MentionDto[]>> => {
+        return fetchWithAuth<ApiResponse<MentionDto[]>>(`/api/workspaces/${workspaceId}/mentions`);
     },
 
     /**
-     * Delete a mention
+     * Get all mentions for a document
      */
-    deleteMention: async (mentionId: string): Promise<ApiResponse<void>> => {
-        return fetchWithAuth<ApiResponse<void>>(`/api/coref/mentions/${mentionId}`, {
+    getMentionsByDocument: async (documentId: string): Promise<ApiResponse<MentionDto[]>> => {
+        return fetchWithAuth<ApiResponse<MentionDto[]>>(`/api/documents/${documentId}/mentions`);
+    },
+
+    /**
+     * Get unassigned mentions for a workspace
+     */
+    getUnassignedMentions: async (workspaceId: string): Promise<ApiResponse<MentionDto[]>> => {
+        return fetchWithAuth<ApiResponse<MentionDto[]>>(`/api/workspaces/${workspaceId}/mentions/unassigned`);
+    },
+
+    /**
+     * Get mention by ID
+     */
+    getMention: async (mentionId: string): Promise<ApiResponse<MentionDto>> => {
+        return fetchWithAuth<ApiResponse<MentionDto>>(`/api/mentions/${mentionId}`);
+    },
+
+    /**
+     * Assign mention to cluster
+     */
+    assignToCluster: async (mentionId: string, clusterId: string): Promise<ApiResponse<MentionDto>> => {
+        return fetchWithAuth<ApiResponse<MentionDto>>(`/api/mentions/${mentionId}/cluster/${clusterId}`, {
+            method: 'PUT',
+        });
+    },
+
+    /**
+     * Unassign mention from cluster
+     */
+    unassignFromCluster: async (mentionId: string): Promise<ApiResponse<MentionDto>> => {
+        return fetchWithAuth<ApiResponse<MentionDto>>(`/api/mentions/${mentionId}/cluster`, {
             method: 'DELETE',
         });
     },
 
     /**
-     * Delete a cluster and all its mentions
+     * Delete mention
      */
-    deleteCluster: async (clusterId: string): Promise<ApiResponse<void>> => {
-        return fetchWithAuth<ApiResponse<void>>(`/api/coref/clusters/${clusterId}`, {
+    deleteMention: async (mentionId: string): Promise<void> => {
+        await fetchWithAuth(`/api/mentions/${mentionId}`, {
+            method: 'DELETE',
+        });
+    },
+
+    // ==================== Cluster Endpoints ====================
+
+    /**
+     * Create a new cluster
+     */
+    createCluster: async (workspaceId: string, request?: CreateClusterRequest): Promise<ApiResponse<ClusterDto>> => {
+        return fetchWithAuth<ApiResponse<ClusterDto>>(`/api/workspaces/${workspaceId}/clusters`, {
+            method: 'POST',
+            body: request ? JSON.stringify(request) : undefined,
+        });
+    },
+
+    /**
+     * Get all clusters for a workspace
+     */
+    getClusters: async (workspaceId: string): Promise<ApiResponse<ClusterDto[]>> => {
+        return fetchWithAuth<ApiResponse<ClusterDto[]>>(`/api/workspaces/${workspaceId}/clusters`);
+    },
+
+    /**
+     * Get cluster by ID
+     */
+    getCluster: async (clusterId: string): Promise<ApiResponse<ClusterDto>> => {
+        return fetchWithAuth<ApiResponse<ClusterDto>>(`/api/clusters/${clusterId}`);
+    },
+
+    /**
+     * Get mentions in a cluster
+     */
+    getMentionsByCluster: async (clusterId: string): Promise<ApiResponse<MentionDto[]>> => {
+        return fetchWithAuth<ApiResponse<MentionDto[]>>(`/api/clusters/${clusterId}/mentions`);
+    },
+
+    /**
+     * Update cluster
+     */
+    updateCluster: async (clusterId: string, request: CreateClusterRequest): Promise<ApiResponse<ClusterDto>> => {
+        return fetchWithAuth<ApiResponse<ClusterDto>>(`/api/clusters/${clusterId}`, {
+            method: 'PUT',
+            body: JSON.stringify(request),
+        });
+    },
+
+    /**
+     * Delete cluster (mentions are unassigned)
+     */
+    deleteCluster: async (clusterId: string): Promise<void> => {
+        await fetchWithAuth(`/api/clusters/${clusterId}`, {
             method: 'DELETE',
         });
     },
 
     /**
-     * Delete all annotations for a workspace
+     * Get annotation statistics for a workspace
      */
-    deleteAllAnnotations: async (workspaceId: string): Promise<ApiResponse<void>> => {
-        return fetchWithAuth<ApiResponse<void>>(`/api/coref/workspaces/${workspaceId}/annotations`, {
-            method: 'DELETE',
-        });
+    getStats: async (workspaceId: string): Promise<ApiResponse<{ totalMentions: number; assignedMentions: number; unassignedMentions: number; clusterCount: number }>> => {
+        return fetchWithAuth(`/api/workspaces/${workspaceId}/coref/stats`);
     },
 };
 

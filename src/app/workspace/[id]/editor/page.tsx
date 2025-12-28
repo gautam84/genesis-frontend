@@ -194,34 +194,97 @@ export default function EditorPage() {
     return cluster?.color || '#6b7280';
   };
 
-  // Handle token click - create mention or select for multi-token
-  const handleTokenClick = async (token: TokenDto, e: React.MouseEvent) => {
+  // Selection state
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionStart, setSelectionStart] = useState<TokenDto | null>(null);
+  const [selectionCurrent, setSelectionCurrent] = useState<TokenDto | null>(null);
+
+  // Handle token mouse down - start selection
+  const handleTokenMouseDown = (token: TokenDto, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsSelecting(true);
+    setSelectionStart(token);
+    setSelectionCurrent(token);
+  };
+
+  // Handle token mouse enter - update selection
+  const handleTokenMouseEnter = (token: TokenDto) => {
+    if (isSelecting && selectionStart) {
+      // Only allow selection within the same sentence
+      if (token.sentenceIndex === selectionStart.sentenceIndex) {
+        setSelectionCurrent(token);
+      }
+    }
+  };
+
+  // Handle token mouse up - finalize selection
+  const handleTokenMouseUp = async (token: TokenDto, e: React.MouseEvent) => {
     e.stopPropagation();
 
-    // Check if this token is already part of a mention
-    const existingMention = mentions.find(
-      m => m.documentId === documentContent?.documentId &&
-        m.sentenceIndex === token.sentenceIndex &&
-        token.tokenIndex >= m.startTokenIndex &&
-        token.tokenIndex <= m.endTokenIndex
-    );
-
-    if (existingMention) {
-      // Click on existing mention - handle linking
-      handleMentionClick(existingMention, e);
+    if (!isSelecting || !selectionStart || !documentContent) {
+      setIsSelecting(false);
+      setSelectionStart(null);
+      setSelectionCurrent(null);
       return;
     }
 
-    // Create new mention for this token
-    if (!documentContent) return;
+    // Ensure we ended in the same sentence (if not, use the current token if it matches, or cancel)
+    let endToken = token;
+    if (token.sentenceIndex !== selectionStart.sentenceIndex) {
+      // If user dragged out of sentence, we could either cancel or just use the last valid selectionCurrent.
+      // For simplicity, if they release on a different sentence, we abort or just use the start token.
+      // Let's abort to avoid confusion.
+      if (selectionCurrent && selectionCurrent.sentenceIndex === selectionStart.sentenceIndex) {
+        endToken = selectionCurrent;
+      } else {
+        // Fallback to just the start token
+        endToken = selectionStart;
+      }
+    }
+
+    // Determine start and end indices
+    const startIdx = Math.min(selectionStart.tokenIndex, endToken.tokenIndex);
+    const endIdx = Math.max(selectionStart.tokenIndex, endToken.tokenIndex);
+
+    const sentenceIndex = selectionStart.sentenceIndex;
+
+    // Reset selection state immediately
+    setIsSelecting(false);
+    setSelectionStart(null);
+    setSelectionCurrent(null);
+
+    // Check overlaps
+    const existingOverlaps = mentions.filter(
+      m => m.documentId === documentContent.documentId &&
+        m.sentenceIndex === sentenceIndex &&
+        Math.max(startIdx, m.startTokenIndex) <= Math.min(endIdx, m.endTokenIndex)
+    );
+
+    if (existingOverlaps.length > 0) {
+      // If we clicked on a single existing mention, handle linking (click-like behavior)
+      if (startIdx === endIdx && existingOverlaps.length === 1) {
+        handleMentionClick(existingOverlaps[0], e);
+        return;
+      }
+
+      // Otherwise, overlapping selection - ignore for now (or could notify user)
+      console.warn("Selection overlaps with existing mention");
+      return;
+    }
+
+    // Construct text from tokens (simple join, could be improved with actual text offset slicing if available)
+    const tokens = documentContent.tokens.filter(
+      t => t.sentenceIndex === sentenceIndex && t.tokenIndex >= startIdx && t.tokenIndex <= endIdx
+    );
+    const text = tokens.map(t => t.form).join(' ');
 
     try {
       const res = await corefApi.createMention(workspaceId, {
         documentId: documentContent.documentId,
-        sentenceIndex: token.sentenceIndex,
-        startTokenIndex: token.tokenIndex,
-        endTokenIndex: token.tokenIndex,
-        text: token.form,
+        sentenceIndex: sentenceIndex,
+        startTokenIndex: startIdx,
+        endTokenIndex: endIdx,
+        text: text,
       });
 
       const newMention = res.data;
@@ -503,11 +566,21 @@ export default function EditorPage() {
             }
 
             // Regular token
+            const isSelected = isSelecting && selectionStart && selectionCurrent &&
+              token.sentenceIndex === selectionStart.sentenceIndex &&
+              token.tokenIndex >= Math.min(selectionStart.tokenIndex, selectionCurrent.tokenIndex) &&
+              token.tokenIndex <= Math.max(selectionStart.tokenIndex, selectionCurrent.tokenIndex);
+
             return (
               <span
                 key={`token-${sentIdx}-${tokenIdx}`}
-                className="cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded px-0.5 transition-colors"
-                onClick={(e) => handleTokenClick(token, e)}
+                className={`cursor-pointer rounded px-0.5 transition-colors ${isSelected
+                  ? 'bg-blue-300 dark:bg-blue-700'
+                  : 'hover:bg-blue-100 dark:hover:bg-blue-900/30'
+                  }`}
+                onMouseDown={(e) => handleTokenMouseDown(token, e)}
+                onMouseEnter={() => handleTokenMouseEnter(token)}
+                onMouseUp={(e) => handleTokenMouseUp(token, e)}
               >
                 {token.form}{' '}
               </span>
@@ -806,7 +879,7 @@ export default function EditorPage() {
                   onMouseMove={handleMouseMove}
                   onClick={cancelLinking}
                 >
-                  <div className="text-lg leading-relaxed text-slate-900 dark:text-white relative z-10">
+                  <div className="text-lg leading-relaxed text-slate-900 dark:text-white relative z-10 select-none">
                     {renderTokenizedText()}
                   </div>
 

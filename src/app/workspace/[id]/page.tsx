@@ -28,7 +28,11 @@ import {
   DocumentResponse,
   MemberResponse,
   UpdateWorkspaceRequest,
-  MemberRole
+  MemberRole,
+  importExportApi,
+  ExportFormat,
+  Column2Mode,
+  ExportOptions
 } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { AuthGuard } from '@/components/auth-guard';
@@ -254,6 +258,65 @@ export default function WorkspacePage() {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
+  // Export state
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>(ExportFormat.SEPARATE_FILES_ZIP);
+  const [column2Mode, setColumn2Mode] = useState<Column2Mode>(Column2Mode.PART_NUMBER);
+  const [exportTargetId, setExportTargetId] = useState<string | null>(null); // null for workspace, string for documentId
+  const [isExporting, setIsExporting] = useState(false);
+
+  const openExportDialog = (documentId?: string) => {
+    setExportTargetId(documentId || null);
+    setIsExportDialogOpen(true);
+    // Reset to defaults
+    setExportFormat(ExportFormat.SEPARATE_FILES_ZIP);
+    setColumn2Mode(Column2Mode.PART_NUMBER);
+  };
+
+  const handleExportAction = async () => {
+    if (!workspace) return;
+    try {
+      setIsExporting(true);
+
+      let result: { blob: Blob; filename: string };
+
+      const options: ExportOptions = {
+        column2Mode: column2Mode,
+        exportFormat: exportFormat,
+        continueSentenceNumbers: true,
+        defaultPartNumber: 0
+      };
+
+      if (exportTargetId) {
+        // Document Export
+        result = await importExportApi.exportDocument(exportTargetId, options);
+      } else {
+        // Workspace Export
+        result = await importExportApi.exportWorkspace(workspace.id, options);
+      }
+
+      const { blob, filename } = result;
+
+      // Trigger download
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setIsExportDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to export:', error);
+      alert('Failed to export.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+
 
   // Filter documents
   const filteredDocuments = documents.filter((doc) => {
@@ -491,7 +554,7 @@ export default function WorkspacePage() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <Button variant="outline" className="w-full">Export</Button>
+                      <Button variant="outline" className="w-full" onClick={() => openExportDialog()}>Export</Button>
                     </CardContent>
                   </Card>
 
@@ -638,21 +701,10 @@ export default function WorkspacePage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleDeleteDocument(doc.id)} className="text-red-600">
-                                    Delete
+                                  <DropdownMenuItem onClick={() => openExportDialog(doc.id)}>
+                                    Export CoNLL
                                   </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                    </svg>
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
+                                  <DropdownMenuSeparator />
                                   <DropdownMenuItem onClick={() => handleDeleteDocument(doc.id)} className="text-red-600">
                                     Delete
                                   </DropdownMenuItem>
@@ -893,6 +945,58 @@ export default function WorkspacePage() {
       </div >
 
 
+      <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{exportTargetId ? 'Export Document' : 'Export Workspace'}</DialogTitle>
+            <DialogDescription>
+              Choose export options.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {!exportTargetId && (
+              <div className="space-y-2">
+                <Label htmlFor="exportFormat">Export Format</Label>
+                <Select
+                  value={exportFormat}
+                  onValueChange={(value) => setExportFormat(value as ExportFormat)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ExportFormat.SEPARATE_FILES_ZIP}>CoNLL-2012 (Zip)</SelectItem>
+                    <SelectItem value={ExportFormat.MERGED_SINGLE_FILE}>CoNLL-2012 (Merged)</SelectItem>
+                    <SelectItem value={ExportFormat.SEPARATE_FILES_ZIP_WITH_MERGED}>CoNLL-2012 (Zip + Merged)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="column2Mode">Column 2 Mode</Label>
+              <Select
+                value={column2Mode}
+                onValueChange={(value) => setColumn2Mode(value as Column2Mode)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={Column2Mode.PART_NUMBER}>Part Number</SelectItem>
+                  <SelectItem value={Column2Mode.SENTENCE_NUMBER}>Sentence Number</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsExportDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleExportAction} disabled={isExporting}>
+              {isExporting ? 'Exporting...' : 'Export'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AuthGuard >
   );
 }

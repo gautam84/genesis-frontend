@@ -54,12 +54,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
         const accessToken = tokenStorage.getAccessToken();
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3003';
-        // Add query param for initial handshake authentication if supported by backend
-        const socketUrl = `${apiUrl}/ws?access_token=${accessToken}`;
+        const socketUrl = `${apiUrl}/ws`;
 
-        // Create client with auto-reconnect
+        // Create client with auto-reconnect and authentication headers
         const client = new Client({
             webSocketFactory: () => new SockJS(socketUrl),
+            connectHeaders: {
+                Authorization: `Bearer ${accessToken}`,
+            },
             reconnectDelay: 5000,
             heartbeatIncoming: 4000,
             heartbeatOutgoing: 4000,

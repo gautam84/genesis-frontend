@@ -43,10 +43,8 @@ export default function EditorPage() {
 
   // UI State
   const [currentDocIndex, setCurrentDocIndex] = useState(0);
-  const [selectedTokens, setSelectedTokens] = useState<TokenDto[]>([]);
   const [linkingFromMention, setLinkingFromMention] = useState<MentionDto | null>(null);
   const [selectedMention, setSelectedMention] = useState<MentionDto | null>(null); // For cluster assignment
-  const [hoveredMention, setHoveredMention] = useState<string | null>(null);
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -75,6 +73,7 @@ export default function EditorPage() {
             initialDocIndex = savedSession.lastDocumentIndex;
             console.log('Restoring to document index:', initialDocIndex);
           }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (sessionErr: any) {
           console.warn('No saved session:', sessionErr);
         }
@@ -114,6 +113,7 @@ export default function EditorPage() {
                   }
                 }, 500); // Longer delay to ensure DOM is rendered
               }
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } catch (contentErr: any) {
               console.warn('Document content not available:', contentErr);
             }
@@ -128,9 +128,11 @@ export default function EditorPage() {
           ]);
           setMentions(mentionsRes.data);
           setClusters(clustersRes.data);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (annotErr: any) {
           console.warn('Annotations not available:', annotErr);
         }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         console.error('Failed to load workspace:', err);
         if (err.message?.includes('Cannot connect')) {
@@ -160,6 +162,7 @@ export default function EditorPage() {
         lastDocumentIndex: docIndex,
         scrollPosition: scrollPos,
       });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (saveErr: any) {
       console.warn('Failed to save session:', saveErr);
     }
@@ -167,7 +170,6 @@ export default function EditorPage() {
     // Reset linking state when switching documents
     setLinkingFromMention(null);
     setMousePosition(null);
-    setHoveredMention(null);
     setSelectedMention(null);
 
     try {
@@ -175,25 +177,13 @@ export default function EditorPage() {
       const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, docId);
       setDocumentContent(contentRes.data);
       setCurrentDocIndex(docIndex);
-      setSelectedTokens([]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to load document:', err);
     }
   };
 
-  // Get cluster for a mention
-  const getClusterForMention = useCallback((mentionId: string) => {
-    const mention = mentions.find(m => m.id === mentionId);
-    if (!mention?.clusterId) return null;
-    return clusters.find(c => c.id === mention.clusterId) || null;
-  }, [mentions, clusters]);
 
-  // Get cluster color
-  const getClusterColor = (clusterId: string | null) => {
-    if (!clusterId) return '#6b7280';
-    const cluster = clusters.find(c => c.id === clusterId);
-    return cluster?.color || '#6b7280';
-  };
 
   // Selection state
   const [isSelecting, setIsSelecting] = useState(false);
@@ -301,6 +291,7 @@ export default function EditorPage() {
         setLinkingFromMention(newMention);
         setSelectedMention(newMention);
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to create mention:', err);
     }
@@ -351,6 +342,7 @@ export default function EditorPage() {
       // Refresh clusters
       const clustersRes = await corefApi.getClusters(workspaceId);
       setClusters(clustersRes.data);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to link mentions:', err);
     }
@@ -361,6 +353,7 @@ export default function EditorPage() {
     try {
       await corefApi.deleteMention(mentionId);
       setMentions(prev => prev.filter(m => m.id !== mentionId));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to delete mention:', err);
     }
@@ -374,6 +367,7 @@ export default function EditorPage() {
       // Refresh mentions to update their cluster assignments
       const mentionsRes = await corefApi.getMentionsByWorkspace(workspaceId);
       setMentions(mentionsRes.data);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to delete cluster:', err);
     }
@@ -393,6 +387,7 @@ export default function EditorPage() {
       setMentions(mentionsRes.data);
       setClusters(clustersRes.data);
       setSelectedMention(null); // Clear selection after assignment
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to assign to cluster:', err);
     }
@@ -462,12 +457,13 @@ export default function EditorPage() {
         scrollPosition: scrollPos,
       });
       console.log('Session saved:', { docIndex: currentDocIndex, scroll: scrollPos });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.warn('Failed to save session:', err);
     } finally {
       setIsSaving(false);
     }
-  }, [workspaceId, currentDocIndex, isSaving]);
+  }, [workspaceId, currentDocIndex, isSaving, editorData, loading]);
 
   // Save on unmount only
   useEffect(() => {
@@ -545,8 +541,7 @@ export default function EditorPage() {
                     backgroundColor: cluster ? `${cluster.color}30` : '#3b82f620',
                     borderBottom: `3px solid ${cluster?.color || '#3b82f6'}`,
                   }}
-                  onMouseEnter={() => setHoveredMention(mention.id)}
-                  onMouseLeave={() => setHoveredMention(null)}
+
                   onClick={(e) => handleMentionClick(mention, e)}
                   title={isLinking ? 'Select another mention to link' : 'Click to start linking'}
                 >
@@ -764,7 +759,7 @@ export default function EditorPage() {
               {selectedMention && !selectedMention.clusterId && (
                 <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                   <p className="text-sm text-green-700 dark:text-green-400">
-                    <strong>"{selectedMention.text}"</strong> selected
+                    <strong>&quot;{selectedMention.text}&quot;</strong> selected
                   </p>
                   <p className="text-xs text-green-600 dark:text-green-500 mt-1">
                     Click a cluster below to add this mention, or click another word to link them
@@ -820,7 +815,7 @@ export default function EditorPage() {
                           key={mention.id}
                           className="text-sm text-slate-600 dark:text-slate-400 flex items-center justify-between group"
                         >
-                          <span className="truncate">"{mention.text}"</span>
+                          <span className="truncate">&quot;{mention.text}&quot;</span>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -854,7 +849,7 @@ export default function EditorPage() {
                         key={mention.id}
                         className="text-sm text-slate-600 dark:text-slate-400 flex items-center justify-between group"
                       >
-                        <span className="truncate">"{mention.text}"</span>
+                        <span className="truncate">&quot;{mention.text}&quot;</span>
                         <Button
                           variant="ghost"
                           size="sm"

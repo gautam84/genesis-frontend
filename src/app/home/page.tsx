@@ -87,19 +87,19 @@ export default function HomePage() {
     }
   };
 
-  const handleDeleteWorkspace = async () => {
-    if (!workspaceToDelete) return;
-    setIsDeleting(true);
-    try {
-      await workspaceApi.delete(workspaceToDelete.id);
-      setWorkspaces(workspaces.filter(w => w.id !== workspaceToDelete.id));
-      setWorkspaceToDelete(null);
-    } catch (error) {
-      console.error('Failed to delete workspace:', error);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+  // const handleDeleteWorkspace = async () => {
+  //   if (!workspaceToDelete) return;
+  //   setIsDeleting(true);
+  //   try {
+  //     await workspaceApi.delete(workspaceToDelete.id);
+  //     setWorkspaces(workspaces.filter(w => w.id !== workspaceToDelete.id));
+  //     setWorkspaceToDelete(null);
+  //   } catch (error) {
+  //     console.error('Failed to delete workspace:', error);
+  //   } finally {
+  //     setIsDeleting(false);
+  //   }
+  // };
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -183,7 +183,7 @@ export default function HomePage() {
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--primary)] via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-[var(--primary)]/20">
             {workspace.name.charAt(0).toUpperCase()}
           </div>
-          <div onClick={(e) => e.stopPropagation()}>
+          {/* <div onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg focus:opacity-100">
@@ -200,7 +200,7 @@ export default function HomePage() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
+          </div> */}
         </div>
         <div className="flex flex-col gap-1">
           <CardTitle className="text-lg font-bold">{workspace.name}</CardTitle>
@@ -485,7 +485,7 @@ export default function HomePage() {
       </main>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={!!workspaceToDelete} onOpenChange={(open) => !open && setWorkspaceToDelete(null)}>
+      {/* <Dialog open={!!workspaceToDelete} onOpenChange={(open) => !open && setWorkspaceToDelete(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -505,7 +505,7 @@ export default function HomePage() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog> */}
     </div>
   );
 }

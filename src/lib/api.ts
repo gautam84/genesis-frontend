@@ -2,7 +2,7 @@
  * API client for Genesis backend
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3003';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 // Types matching backend DTOs
 export interface SignupRequest {

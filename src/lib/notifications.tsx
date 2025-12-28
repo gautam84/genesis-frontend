@@ -53,7 +53,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
 
         const accessToken = tokenStorage.getAccessToken();
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3003';
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
         const socketUrl = `${apiUrl}/ws`;
 
         // Create client with auto-reconnect and authentication headers

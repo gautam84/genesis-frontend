@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth, useRequireAuth } from '@/lib/auth';
 import { workspaceApi, WorkspaceResponse, AnnotationType, CreateWorkspaceRequest } from '@/lib/api';
-import { LogOut, Settings, User } from 'lucide-react';
+import { LogOut, Settings, User, MoreVertical, Trash, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function HomePage() {
@@ -39,6 +39,8 @@ export default function HomePage() {
   const [workspaceType, setWorkspaceType] = useState<string>('');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [workspaceToDelete, setWorkspaceToDelete] = useState<WorkspaceResponse | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -81,6 +83,20 @@ export default function HomePage() {
       console.error('Failed to create workspace:', error);
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleDeleteWorkspace = async () => {
+    if (!workspaceToDelete) return;
+    setIsDeleting(true);
+    try {
+      await workspaceApi.delete(workspaceToDelete.id);
+      setWorkspaces(workspaces.filter(w => w.id !== workspaceToDelete.id));
+      setWorkspaceToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete workspace:', error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -143,14 +159,34 @@ export default function HomePage() {
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--primary)] via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-[var(--primary)]/20">
             {workspace.name.charAt(0).toUpperCase()}
           </div>
-          <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
-            <svg className="w-5 h-5 text-slate-400 hover:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-            </svg>
-          </button>
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg focus:opacity-100">
+                  <MoreVertical className="w-5 h-5 text-slate-400 hover:text-slate-600" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-red-600 cursor-pointer focus:text-red-600"
+                  onClick={() => setWorkspaceToDelete(workspace)}
+                >
+                  <Trash className="w-4 h-4 mr-2" />
+                  Delete Workspace
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-        <CardTitle className="text-lg font-bold">{workspace.name}</CardTitle>
-        <CardDescription className="text-sm">{workspace.annotationType}</CardDescription>
+        <div className="flex flex-col gap-1">
+          <CardTitle className="text-lg font-bold">{workspace.name}</CardTitle>
+          <CardDescription className="text-sm">{workspace.annotationType}</CardDescription>
+          {workspace.description && (
+            <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 mt-1" title={workspace.description}>
+              {workspace.description}
+            </p>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -179,7 +215,7 @@ export default function HomePage() {
           </div>
         </div>
       </CardContent>
-    </Card>
+    </Card >
   );
 
   return (
@@ -428,6 +464,29 @@ export default function HomePage() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!workspaceToDelete} onOpenChange={(open) => !open && setWorkspaceToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              Delete Workspace
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete workspace "{workspaceToDelete?.name}"? This action cannot be undone and will delete all documents and annotations within this workspace.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWorkspaceToDelete(null)} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteWorkspace} disabled={isDeleting}>
+              {isDeleting ? 'Deleting...' : 'Delete Workspace'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

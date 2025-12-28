@@ -299,6 +299,7 @@ export interface DocumentResponse {
     tokenEndIndex?: number;
     storedFileUrl?: string;
     fileSize?: number;
+    progress?: number;
     createdAt: string;
     updatedAt: string;
 }

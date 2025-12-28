@@ -36,6 +36,7 @@ import {
 } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { AuthGuard } from '@/components/auth-guard';
+import { LogOut, Settings, User } from 'lucide-react';
 
 // Icons (using inline SVGs for now)
 const Icons = {
@@ -94,8 +95,10 @@ export default function WorkspacePage() {
   const params = useParams();
   const router = useRouter();
   const workspaceId = params.id as string;
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const [workspace, setWorkspace] = useState<WorkspaceResponse | null>(null);
   const [documents, setDocuments] = useState<DocumentResponse[]>([]);
@@ -127,6 +130,30 @@ export default function WorkspacePage() {
       fetchData();
     }
   }, [workspaceId, user]);
+
+  const getUserInitials = () => {
+    if (!user) return 'U';
+    const first = user.firstName?.charAt(0) || '';
+    const last = user.lastName?.charAt(0) || '';
+    return (first + last).toUpperCase() || user.username?.charAt(0)?.toUpperCase() || 'U';
+  };
+
+  const getUserDisplayName = () => {
+    if (!user) return 'User';
+    if (user.firstName) {
+      return user.firstName + (user.lastName ? ' ' + user.lastName : '');
+    }
+    return user.username || 'User';
+  };
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -409,12 +436,42 @@ export default function WorkspacePage() {
                 </svg>
                 <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
               </Button>
-              <Avatar className="cursor-pointer ring-2 ring-white dark:ring-slate-800 hover:shadow-lg transition-shadow">
-                <AvatarImage src="" alt="User avatar" />
-                <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
-                  {user?.firstName?.charAt(0) || user?.username?.charAt(0) || 'U'}
-                </AvatarFallback>
-              </Avatar>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Avatar className="cursor-pointer ring-2 ring-white dark:ring-slate-800 hover:shadow-lg transition-shadow">
+                    <AvatarImage src="" alt={getUserDisplayName()} />
+                    <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
+                      {getUserInitials()}
+                    </AvatarFallback>
+                  </Avatar>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{getUserDisplayName()}</p>
+                      <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="cursor-pointer">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="cursor-pointer">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Settings</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>{isLoggingOut ? 'Logging out...' : 'Log out'}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>
@@ -673,6 +730,20 @@ export default function WorkspacePage() {
                                   <span>•</span>
                                   <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
                                 </div>
+                                {(doc.progress !== undefined && doc.progress > 0) && (
+                                  <div className="mt-2 w-full max-w-xs">
+                                    <div className="flex justify-between text-[10px] mb-1 text-slate-500">
+                                      <span>Progress</span>
+                                      <span>{Math.round(doc.progress * 100)}%</span>
+                                    </div>
+                                    <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                      <div
+                                        className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                                        style={{ width: `${Math.round((doc.progress || 0) * 100)}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-3">

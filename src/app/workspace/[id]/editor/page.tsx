@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/auth';
 import {
   editorApi,
   corefApi,
+  documentApi,
   WorkspaceEditorResponse,
   DocumentContentResponse,
   TokenDto,
@@ -700,6 +701,43 @@ export default function EditorPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
                 Back to Workspace
+              </Button>
+              <Button
+                variant={editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? 'default' : 'outline'}
+                size="sm"
+                className={editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}
+                onClick={async () => {
+                  const doc = editorData.documents[currentDocIndex];
+                  const newStatus = doc.status === 'COMPLETE' ? 'ANNOTATING' : 'COMPLETE';
+                  try {
+                    // Call API to update status
+                    await documentApi.updateStatus(doc.id, newStatus);
+
+                    // Optimistically update local state
+                    const newDocs = [...editorData.documents];
+                    newDocs[currentDocIndex] = { ...doc, status: newStatus };
+                    setEditorData({ ...editorData, documents: newDocs });
+
+                  } catch (err) {
+                    console.error('Failed to update status:', err);
+                  }
+                }}
+              >
+                {editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? (
+                  <>
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Completed
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Mark Complete
+                  </>
+                )}
               </Button>
               <Avatar className="cursor-pointer ring-2 ring-white dark:ring-slate-800">
                 <AvatarImage src="" alt="User avatar" />

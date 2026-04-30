@@ -785,6 +785,25 @@ export const corefApi = {
     },
 
     /**
+     * Merge multiple source clusters into a target cluster.
+     * Backend reassigns all mentions from sources to target, deletes sources,
+     * then compacts cluster numbers across the workspace.
+     */
+    mergeClusters: async (
+        workspaceId: string,
+        sourceClusterIds: string[],
+        targetClusterId: string,
+    ): Promise<ApiResponse<ClusterDto>> => {
+        return fetchWithAuth<ApiResponse<ClusterDto>>(
+            `/api/workspaces/${workspaceId}/clusters/merge`,
+            {
+                method: 'POST',
+                body: JSON.stringify({ sourceClusterIds, targetClusterId }),
+            },
+        );
+    },
+
+    /**
      * Get annotation statistics for a workspace
      */
     getStats: async (workspaceId: string): Promise<ApiResponse<{ totalMentions: number; assignedMentions: number; unassignedMentions: number; clusterCount: number }>> => {

@@ -8,6 +8,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useAuth } from '@/lib/auth';
 import {
   editorApi,
@@ -48,6 +56,13 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
   const [selectedMention, setSelectedMention] = useState<MentionDto | null>(null); // For cluster assignment
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Cluster merge state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedClusterIds, setSelectedClusterIds] = useState<Set<string>>(new Set());
+  const [showMergeConfirm, setShowMergeConfirm] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null); // For scroll tracking on main element
   const lastScrollRef = useRef(0); // Track last scroll position reliably for unmount saving
@@ -361,16 +376,100 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
   };
 
   // Delete cluster (unassigns all mentions in this cluster)
+  // Backend compacts cluster numbers after delete, so re-fetch BOTH clusters
+  // (to pick up renumbered cluster_number values) AND mentions (mentions carry
+  // cached clusterNumber too).
   const handleDeleteCluster = async (clusterId: string) => {
     try {
       await corefApi.deleteCluster(clusterId);
-      setClusters(prev => prev.filter(c => c.id !== clusterId));
-      // Refresh mentions to update their cluster assignments
-      const mentionsRes = await corefApi.getMentionsByWorkspace(workspaceId);
+      const [clustersRes, mentionsRes] = await Promise.all([
+        corefApi.getClusters(workspaceId),
+        corefApi.getMentionsByWorkspace(workspaceId),
+      ]);
+      setClusters(clustersRes.data);
       setMentions(mentionsRes.data);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to delete cluster:', err);
+    }
+  };
+
+  // ==================== Cluster Merge Handlers ====================
+
+  // Toggle a cluster's membership in the merge selection set
+  const toggleClusterSelection = (clusterId: string) => {
+    setSelectedClusterIds(prev => {
+      const next = new Set(prev);
+      if (next.has(clusterId)) {
+        next.delete(clusterId);
+      } else {
+        next.add(clusterId);
+      }
+      return next;
+    });
+  };
+
+  // Enter select mode (resets any prior selection)
+  const enterSelectMode = () => {
+    setSelectedClusterIds(new Set());
+    setSelectMode(true);
+    // Cancel any in-progress mention linking — modes don't mix
+    setLinkingFromMention(null);
+    setSelectedMention(null);
+  };
+
+  // Exit select mode (cancel)
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedClusterIds(new Set());
+    setShowMergeConfirm(false);
+    setMergeError(null);
+  };
+
+  // Compute target = lowest clusterNumber among selected; sources = the rest.
+  const computeMergePlan = () => {
+    const selected = clusters.filter(c => selectedClusterIds.has(c.id));
+    if (selected.length < 2) return null;
+    const sorted = [...selected].sort((a, b) => a.clusterNumber - b.clusterNumber);
+    const target = sorted[0];
+    const sources = sorted.slice(1);
+    const mentionsToMove = sources.reduce((sum, c) => sum + (c.mentionCount || 0), 0);
+    return { target, sources, mentionsToMove };
+  };
+
+  // Confirm + execute merge
+  const handleMergeConfirm = async () => {
+    const plan = computeMergePlan();
+    if (!plan) return;
+
+    setMerging(true);
+    setMergeError(null);
+    try {
+      await corefApi.mergeClusters(
+        workspaceId,
+        plan.sources.map(s => s.id),
+        plan.target.id,
+      );
+
+      // Backend compacts cluster numbers after merge — refetch BOTH clusters
+      // and mentions so cluster_number values everywhere are consistent.
+      const [clustersRes, mentionsRes] = await Promise.all([
+        corefApi.getClusters(workspaceId),
+        corefApi.getMentionsByWorkspace(workspaceId),
+      ]);
+      setClusters(clustersRes.data);
+      setMentions(mentionsRes.data);
+
+      // Reset merge UI
+      setSelectedClusterIds(new Set());
+      setSelectMode(false);
+      setShowMergeConfirm(false);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      console.error('Failed to merge clusters:', err);
+      setMergeError(err?.message || 'Failed to merge clusters');
+    } finally {
+      setMerging(false);
     }
   };
 
@@ -776,18 +875,97 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
                 </div>
               )}
 
+              {/* Cluster merge controls — only show when there are >= 2 clusters */}
+              {clusters.length >= 2 && (
+                <div className="flex items-center gap-2">
+                  {!selectMode ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs"
+                      onClick={enterSelectMode}
+                      title="Select two or more clusters to merge"
+                    >
+                      <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                      </svg>
+                      Select clusters to merge
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs"
+                        onClick={exitSelectMode}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="ml-auto text-xs bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-white"
+                        disabled={selectedClusterIds.size < 2}
+                        onClick={() => setShowMergeConfirm(true)}
+                      >
+                        Merge {selectedClusterIds.size} cluster{selectedClusterIds.size === 1 ? '' : 's'}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* Clusters */}
               {clusters.map((cluster) => {
                 const clusterMentions = mentions.filter(m => m.clusterId === cluster.id);
-                const canAssign = selectedMention && !selectedMention.clusterId;
+                const canAssign = !selectMode && selectedMention && !selectedMention.clusterId;
+                const isSelectedForMerge = selectMode && selectedClusterIds.has(cluster.id);
                 return (
                   <div
                     key={cluster.id}
-                    className={`p-3 rounded-lg bg-slate-50 dark:bg-slate-800 ${canAssign ? 'cursor-pointer ring-2 ring-green-400 hover:ring-green-500 transition-all' : ''}`}
-                    onClick={() => canAssign && handleAssignToCluster(cluster.id)}
-                    title={canAssign ? `Click to add "${selectedMention.text}" to this cluster` : ''}
+                    className={`p-3 rounded-lg bg-slate-50 dark:bg-slate-800 transition-all ${
+                      selectMode
+                        ? `cursor-pointer ${
+                            isSelectedForMerge
+                              ? 'ring-2 ring-[var(--primary)] shadow-md'
+                              : 'hover:ring-2 hover:ring-slate-300 dark:hover:ring-slate-600'
+                          }`
+                        : canAssign
+                          ? 'cursor-pointer ring-2 ring-green-400 hover:ring-green-500'
+                          : ''
+                    }`}
+                    onClick={() => {
+                      if (selectMode) {
+                        toggleClusterSelection(cluster.id);
+                      } else if (canAssign) {
+                        handleAssignToCluster(cluster.id);
+                      }
+                    }}
+                    title={
+                      selectMode
+                        ? isSelectedForMerge
+                          ? 'Click to deselect'
+                          : 'Click to select for merge'
+                        : canAssign
+                          ? `Click to add "${selectedMention!.text}" to this cluster`
+                          : ''
+                    }
                   >
                     <div className="flex items-center gap-2 mb-2 group">
+                      {selectMode && (
+                        <div
+                          className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                            isSelectedForMerge
+                              ? 'bg-[var(--primary)] border-[var(--primary)]'
+                              : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900'
+                          }`}
+                        >
+                          {isSelectedForMerge && (
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                      )}
                       <div
                         className="w-4 h-4 rounded-full"
                         style={{ backgroundColor: cluster.color }}
@@ -798,17 +976,22 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
                       <Badge variant="secondary" className="text-xs ml-auto">
                         {clusterMentions.length} mentions
                       </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
-                        onClick={() => handleDeleteCluster(cluster.id)}
-                        title="Delete cluster"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </Button>
+                      {!selectMode && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCluster(cluster.id);
+                          }}
+                          title="Delete cluster"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </Button>
+                      )}
                     </div>
                     <div className="space-y-1 ml-6">
                       {clusterMentions.map((mention) => (
@@ -817,16 +1000,21 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
                           className="text-sm text-slate-600 dark:text-slate-400 flex items-center justify-between group"
                         >
                           <span className="truncate">&quot;{mention.text}&quot;</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
-                            onClick={() => handleDeleteMention(mention.id)}
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </Button>
+                          {!selectMode && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteMention(mention.id);
+                              }}
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1028,6 +1216,77 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
           </aside>
         </div>
       </div>
+
+      {/* Merge confirmation dialog */}
+      <Dialog
+        open={showMergeConfirm}
+        onOpenChange={(open) => {
+          if (!open && !merging) {
+            setShowMergeConfirm(false);
+            setMergeError(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Merge clusters?</DialogTitle>
+            <DialogDescription>
+              {(() => {
+                const plan = computeMergePlan();
+                if (!plan) return 'Select at least two clusters to merge.';
+                const sourceList = plan.sources
+                  .map(s => `Cluster ${s.clusterNumber}`)
+                  .join(', ');
+                return (
+                  <>
+                    Merge {sourceList} into{' '}
+                    <strong>Cluster {plan.target.clusterNumber}</strong>?{' '}
+                    {plan.mentionsToMove} mention
+                    {plan.mentionsToMove === 1 ? '' : 's'} will be reassigned.
+                    Cluster numbers will be renumbered to stay sequential.
+                  </>
+                );
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+
+          {mergeError && (
+            <div className="p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+              {mergeError}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowMergeConfirm(false);
+                setMergeError(null);
+              }}
+              disabled={merging}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-white"
+              onClick={handleMergeConfirm}
+              disabled={merging || !computeMergePlan()}
+            >
+              {merging ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Merging...
+                </>
+              ) : (
+                'Confirm merge'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

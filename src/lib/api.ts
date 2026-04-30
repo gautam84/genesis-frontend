@@ -339,6 +339,9 @@ export interface DocumentContentResponse {
     totalSentences: number;
     totalTokens: number;
     globalTokenOffset: number;
+    currentPage?: number;
+    totalPages?: number;
+    pageSize?: number;
 }
 
 export interface EditorDocumentInfo {
@@ -612,17 +615,30 @@ export const editorApi = {
     },
 
     /**
-     * Get document content with tokens for display
+     * Get document content with tokens for display (paginated by sentences).
      */
-    getDocumentContent: async (documentId: string): Promise<ApiResponse<DocumentContentResponse>> => {
-        return fetchWithAuth<ApiResponse<DocumentContentResponse>>(`/api/editor/documents/${documentId}/content`);
+    getDocumentContent: async (
+        documentId: string,
+        page: number = 0,
+        size: number = 50,
+    ): Promise<ApiResponse<DocumentContentResponse>> => {
+        return fetchWithAuth<ApiResponse<DocumentContentResponse>>(
+            `/api/editor/documents/${documentId}/content?page=${page}&size=${size}`,
+        );
     },
 
     /**
-     * Get document content with workspace-level token offset
+     * Get document content with workspace-level token offset (paginated by sentences).
      */
-    getDocumentContentWithOffset: async (workspaceId: string, documentId: string): Promise<ApiResponse<DocumentContentResponse>> => {
-        return fetchWithAuth<ApiResponse<DocumentContentResponse>>(`/api/editor/workspaces/${workspaceId}/documents/${documentId}/content`);
+    getDocumentContentWithOffset: async (
+        workspaceId: string,
+        documentId: string,
+        page: number = 0,
+        size: number = 50,
+    ): Promise<ApiResponse<DocumentContentResponse>> => {
+        return fetchWithAuth<ApiResponse<DocumentContentResponse>>(
+            `/api/editor/workspaces/${workspaceId}/documents/${documentId}/content?page=${page}&size=${size}`,
+        );
     },
 
     /**

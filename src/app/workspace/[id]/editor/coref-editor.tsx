@@ -52,6 +52,11 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null); // For scroll tracking on main element
   const lastScrollRef = useRef(0); // Track last scroll position reliably for unmount saving
   const cardContentRef = useRef<HTMLDivElement>(null); // For arrow positioning
+  const sentinelRef = useRef<HTMLDivElement>(null); // Bottom sentinel for infinite scroll
+  const loadingMoreRef = useRef(false); // Guards re-entry into loadNextPage
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const PAGE_SIZE = 50;
 
   // Load workspace data on mount
   useEffect(() => {
@@ -100,7 +105,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
           // Only load content if document is tokenized
           if (doc.isTokenized && doc.tokenCount > 0) {
             try {
-              const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, doc.id);
+              const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, doc.id, 0, PAGE_SIZE);
               setDocumentContent(contentRes.data);
 
               // Restore scroll position after content loads (need delay for DOM to render)
@@ -175,7 +180,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
 
     try {
       const docId = editorData.documents[docIndex].id;
-      const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, docId);
+      const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, docId, 0, PAGE_SIZE);
       setDocumentContent(contentRes.data);
       setCurrentDocIndex(docIndex);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -488,6 +493,65 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
     }, 1000); // Debounce save 1s after scroll stops
   };
 
+  // Append next page of sentences/tokens to current document content
+  const loadNextPage = useCallback(async () => {
+    if (loadingMoreRef.current) return;
+    if (!documentContent) return;
+    const cur = documentContent.currentPage ?? 0;
+    const total = documentContent.totalPages ?? 1;
+    if (cur + 1 >= total) return; // No more pages
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const next = await editorApi.getDocumentContentWithOffset(
+        workspaceId,
+        documentContent.documentId,
+        cur + 1,
+        documentContent.pageSize ?? PAGE_SIZE,
+      );
+      setDocumentContent(prev => {
+        if (!prev) return next.data;
+        if (prev.documentId !== next.data.documentId) return prev; // Doc switched mid-flight
+        return {
+          ...prev,
+          sentences: [...prev.sentences, ...next.data.sentences],
+          tokens: [...prev.tokens, ...next.data.tokens],
+          currentPage: next.data.currentPage,
+          totalPages: next.data.totalPages,
+          pageSize: next.data.pageSize,
+        };
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      console.warn('Failed to load next page:', err);
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [documentContent, workspaceId]);
+
+  // IntersectionObserver: load next page when sentinel enters viewport
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const root = containerRef.current;
+    if (!sentinel || !documentContent) return;
+    const cur = documentContent.currentPage ?? 0;
+    const total = documentContent.totalPages ?? 1;
+    if (cur + 1 >= total) return;
+
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(e => e.isIntersecting)) {
+          loadNextPage();
+        }
+      },
+      { root: root || null, rootMargin: '200px', threshold: 0 },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [documentContent, loadNextPage]);
+
   // Render tokens with annotations
   const renderTokenizedText = () => {
     if (!documentContent?.tokens?.length) {
@@ -498,7 +562,11 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
     const sentences = documentContent.sentences || [];
     const processedMentions = new Set<string>(); // Track which mentions we've rendered
 
-    return sentences.map((sentence, sentIdx) => {
+    const cur = documentContent.currentPage ?? 0;
+    const total = documentContent.totalPages ?? 1;
+    const hasMore = cur + 1 < total;
+
+    const sentenceNodes = sentences.map((sentence, sentIdx) => {
       // Get tokens for this sentence
       const sentenceTokens = documentContent.tokens.filter(t => t.sentenceIndex === sentIdx);
 
@@ -586,6 +654,22 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
         </div>
       );
     });
+
+    return (
+      <>
+        {sentenceNodes}
+        {hasMore && (
+          <div ref={sentinelRef} className="h-12 flex items-center justify-center text-xs text-slate-400">
+            {loadingMore ? 'Loading more...' : 'Scroll to load more'}
+          </div>
+        )}
+        {!hasMore && total > 1 && (
+          <div className="h-8 flex items-center justify-center text-xs text-slate-400">
+            End of document
+          </div>
+        )}
+      </>
+    );
   };
 
   // Loading state

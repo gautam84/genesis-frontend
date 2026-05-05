@@ -19,6 +19,7 @@ import {
   TokenDto,
   UNIVERSAL_POS_TAGS,
   PosTag,
+  PosAnnotation,
 } from '@/lib/api';
 
 interface PosEditorProps {
@@ -43,6 +44,11 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
 
   // Track local POS overrides (optimistic updates before API confirms)
   const [localPosMap, setLocalPosMap] = useState<Record<string, string | null>>({});
+
+  // All annotators' POS tags for the current document, keyed by tokenId.
+  const [annotationsByToken, setAnnotationsByToken] = useState<Record<string, PosAnnotation[]>>({});
+
+  const currentUser = user?.username ?? null;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const lastScrollRef = useRef(0);
@@ -91,6 +97,13 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
               const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, doc.id);
               setDocumentContent(contentRes.data);
 
+              try {
+                const annRes = await posApi.getAnnotationsForDocument(doc.id);
+                setAnnotationsByToken(groupAnnotationsByToken(annRes.data || []));
+              } catch {
+                setAnnotationsByToken({});
+              }
+
               if (savedSession?.scrollPosition) {
                 setTimeout(() => {
                   if (containerRef.current) {
@@ -138,16 +151,34 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
 
     setSelectedTokenId(null);
     setLocalPosMap({});
+    setAnnotationsByToken({});
 
     try {
       const docId = editorData.documents[docIndex].id;
       const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, docId);
       setDocumentContent(contentRes.data);
       setCurrentDocIndex(docIndex);
+
+      try {
+        const annRes = await posApi.getAnnotationsForDocument(docId);
+        setAnnotationsByToken(groupAnnotationsByToken(annRes.data || []));
+      } catch {
+        setAnnotationsByToken({});
+      }
     } catch (err) {
       console.error('Failed to load document:', err);
     }
   };
+
+  // Helper: group flat annotations into Record<tokenId, PosAnnotation[]>
+  function groupAnnotationsByToken(annotations: PosAnnotation[]): Record<string, PosAnnotation[]> {
+    const out: Record<string, PosAnnotation[]> = {};
+    for (const a of annotations) {
+      if (!out[a.tokenId]) out[a.tokenId] = [];
+      out[a.tokenId].push(a);
+    }
+    return out;
+  }
 
   // Handle token click - select it for tagging
   const handleTokenClick = (token: TokenDto, e: React.MouseEvent) => {
@@ -173,7 +204,24 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
     setLocalPosMap(prev => ({ ...prev, [tokenId]: posTag }));
 
     try {
-      await posApi.updateTokenPos(tokenId, posTag);
+      const res = await posApi.updateTokenPos(tokenId, posTag);
+      // Refresh annotations cache: insert/replace current-user entry, or remove on null.
+      setAnnotationsByToken(prev => {
+        const next = { ...prev };
+        const existing = next[tokenId] ? [...next[tokenId]] : [];
+        const filtered = currentUser
+          ? existing.filter(a => a.annotatorId !== currentUser)
+          : existing;
+        if (posTag !== null && res.data) {
+          filtered.push(res.data);
+        }
+        if (filtered.length === 0) {
+          delete next[tokenId];
+        } else {
+          next[tokenId] = filtered;
+        }
+        return next;
+      });
     } catch (err) {
       console.error('Failed to update POS tag:', err);
       // Revert on error
@@ -183,7 +231,7 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
         return next;
       });
     }
-  }, []);
+  }, [currentUser]);
 
   // Handle POS tag selection from palette
   const handlePosTagSelect = (tag: PosTag) => {
@@ -227,10 +275,27 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
     }
   }, [selectedTokenId, documentContent]);
 
-  // Get effective POS for a token (local override > server value)
+  // Get effective POS for a token: local optimistic write > current user's
+  // annotation > most-recent annotation > legacy token.pos column.
   const getTokenPos = (token: TokenDto): string | null => {
     if (token.id in localPosMap) return localPosMap[token.id];
+    const annotations = annotationsByToken[token.id];
+    if (annotations && annotations.length > 0) {
+      if (currentUser) {
+        const mine = annotations.find(a => a.annotatorId === currentUser);
+        if (mine) return mine.posTag;
+      }
+      const sorted = [...annotations].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      return sorted[0].posTag;
+    }
     return token.pos;
+  };
+
+  // Annotations from OTHER annotators (not current user) for disagreement display.
+  const getOtherAnnotations = (tokenId: string): PosAnnotation[] => {
+    const all = annotationsByToken[tokenId] || [];
+    if (!currentUser) return [];
+    return all.filter(a => a.annotatorId !== currentUser);
   };
 
   // Get PosTag object for a given tag string
@@ -355,6 +420,10 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
             const pos = getTokenPos(token);
             const tagInfo = getPosTagInfo(pos);
             const isSelected = selectedTokenId === token.id;
+            const others = getOtherAnnotations(token.id).filter(a => a.posTag !== pos);
+            const disagreementTitle = others.length > 0
+              ? others.map(a => `${a.annotatorId}: ${a.posTag}`).join('\n')
+              : undefined;
 
             return (
               <span
@@ -386,6 +455,23 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
                 ) : (
                   <span className="text-[10px] text-slate-300 dark:text-slate-600 mt-0.5 leading-none">
                     &mdash;
+                  </span>
+                )}
+                {others.length > 0 && (
+                  <span
+                    className="flex gap-0.5 mt-0.5 leading-none"
+                    title={disagreementTitle}
+                  >
+                    {others.slice(0, 5).map((a) => {
+                      const otherInfo = getPosTagInfo(a.posTag);
+                      return (
+                        <span
+                          key={a.id}
+                          className="w-1 h-1 rounded-full"
+                          style={{ backgroundColor: otherInfo?.color || '#9ca3af' }}
+                        />
+                      );
+                    })}
                   </span>
                 )}
               </span>
@@ -474,7 +560,7 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
               </Badge>
             )}
             <Badge variant="secondary" className="text-sm">
-              {stats.tagged}/{stats.total} tagged
+              {stats.tagged}/{stats.total} tagged{currentUser ? ' by you' : ''}
             </Badge>
             <Button
               variant="outline"

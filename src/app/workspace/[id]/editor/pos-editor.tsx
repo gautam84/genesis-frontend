@@ -335,6 +335,30 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
         return;
       }
 
+      // Move selection within the POS tag palette (wraps).
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const idx = selectedPosTag
+          ? UNIVERSAL_POS_TAGS.findIndex(t => t.tag === selectedPosTag.tag)
+          : -1;
+        const len = UNIVERSAL_POS_TAGS.length;
+        const next = e.key === 'ArrowDown'
+          ? (idx + 1 + len) % len
+          : (idx <= 0 ? len - 1 : idx - 1);
+        setSelectedPosTag(UNIVERSAL_POS_TAGS[next]);
+        return;
+      }
+
+      // Enter applies the highlighted palette tag to the selected token and advances.
+      if (e.key === 'Enter') {
+        if (selectedPosTag && selectedTokenId) {
+          e.preventDefault();
+          applyPosTag(selectedTokenId, selectedPosTag.tag);
+          advanceToNextToken();
+        }
+        return;
+      }
+
       if (e.key === 'Backspace' || e.key === 'Delete') {
         e.preventDefault();
         clearSelectedTokenPos();
@@ -357,7 +381,7 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [advanceToNextToken, moveToPrevToken, clearSelectedTokenPos, selectedTokenId]);
+  }, [advanceToNextToken, moveToPrevToken, clearSelectedTokenPos, selectedTokenId, selectedPosTag, applyPosTag]);
 
   // Save session helper
   const saveSession = useCallback(async () => {

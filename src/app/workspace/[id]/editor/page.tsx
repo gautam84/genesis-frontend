@@ -6,6 +6,7 @@ import { AuthGuard } from '@/components/auth-guard';
 import { workspaceApi, AnnotationType } from '@/lib/api';
 import CorefEditor from './coref-editor';
 import PosEditor from './pos-editor';
+import WsdEditor from './wsd-editor';
 
 export default function EditorPage() {
   const params = useParams();
@@ -59,6 +60,7 @@ export default function EditorPage() {
     <AuthGuard>
       {annotationType === 'POS' && <PosEditor workspaceId={workspaceId} />}
       {annotationType === 'COREF' && <CorefEditor workspaceId={workspaceId} />}
+      {annotationType === 'WSD' && <WsdEditor workspaceId={workspaceId} />}
       {annotationType === 'NER' && (
         <div className="min-h-screen flex items-center justify-center">
           <p className="text-slate-500">NER annotation editor is coming soon.</p>

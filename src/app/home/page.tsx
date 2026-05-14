@@ -37,6 +37,7 @@ export default function HomePage() {
   const [isNewWorkspaceOpen, setIsNewWorkspaceOpen] = useState(false);
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceDescription, setWorkspaceDescription] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
   const [workspaceType, setWorkspaceType] = useState<string>('');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -64,6 +65,7 @@ export default function HomePage() {
   const handleCreateWorkspace = async () => {
     if (!workspaceName || !workspaceType) return;
 
+    setCreateError(null);
     try {
       setIsCreating(true);
       const request: CreateWorkspaceRequest = {
@@ -81,9 +83,18 @@ export default function HomePage() {
       setWorkspaceDescription('');
       setWorkspaceType('');
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create workspace';
       console.error('Failed to create workspace:', error);
+      setCreateError(message);
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const closeNewWorkspaceDialog = (open: boolean) => {
+    setIsNewWorkspaceOpen(open);
+    if (!open) {
+      setCreateError(null);
     }
   };
 
@@ -321,7 +332,7 @@ export default function HomePage() {
                 </svg>
                 Import Workspace
               </Button>
-              <Dialog open={isNewWorkspaceOpen} onOpenChange={setIsNewWorkspaceOpen}>
+              <Dialog open={isNewWorkspaceOpen} onOpenChange={closeNewWorkspaceDialog}>
                 <DialogTrigger asChild>
                   <Button size="lg" className="gap-2">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -374,8 +385,16 @@ export default function HomePage() {
                       </Select>
                     </div>
                   </div>
+                  {createError && (
+                    <div
+                      role="alert"
+                      className="mt-2 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-700 dark:text-red-300"
+                    >
+                      {createError}
+                    </div>
+                  )}
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsNewWorkspaceOpen(false)}>
+                    <Button variant="outline" onClick={() => closeNewWorkspaceDialog(false)}>
                       Cancel
                     </Button>
                     <Button onClick={handleCreateWorkspace} disabled={!workspaceName || !workspaceType || isCreating}>

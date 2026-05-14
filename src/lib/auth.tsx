@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { authApi, tokenStorage, UserResponse } from './api';
+import { authApi, tokenStorage, UserResponse, NetworkError, SessionExpiredError } from './api';
 
 interface AuthContextType {
     user: UserResponse | null;
@@ -27,13 +27,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return;
         }
 
+        // One quick retry on transient network errors so we ride through a
+        // brief backend restart / deploy without clobbering the session.
+        const attempt = async () => {
+            try {
+                return await authApi.getMe();
+            } catch (err) {
+                if (err instanceof NetworkError) {
+                    await new Promise((r) => setTimeout(r, 800));
+                    return await authApi.getMe();
+                }
+                throw err;
+            }
+        };
+
         try {
-            const response = await authApi.getMe();
+            const response = await attempt();
             setUser(response.data);
-        } catch {
-            // Token invalid/expired, clear it
-            tokenStorage.clearTokens();
-            setUser(null);
+        } catch (err) {
+            if (err instanceof SessionExpiredError) {
+                // Refresh token genuinely invalid; tokens already cleared by fetchWithAuth.
+                setUser(null);
+            } else if (err instanceof NetworkError) {
+                // Server unreachable even after retry. Keep tokens — user is still
+                // logged in once the backend comes back. Surface as logged-out for
+                // this render so AuthGuard can show a connection state.
+                console.warn('Auth check failed: backend unreachable. Keeping session.');
+                setUser(null);
+            } else {
+                // Real auth failure (403/etc) or unexpected — clear and start over.
+                tokenStorage.clearTokens();
+                setUser(null);
+            }
         } finally {
             setIsLoading(false);
         }

@@ -4,6 +4,29 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
+/**
+ * Thrown when the request never reached the server (DNS, offline, CORS preflight,
+ * backend mid-restart). Callers must NOT treat this as an auth failure: the token
+ * is still valid, the network just blinked. Distinguished from auth/validation
+ * errors which arrive as a regular Error with the server's message.
+ */
+export class NetworkError extends Error {
+    readonly endpoint: string;
+    constructor(endpoint: string, cause?: unknown) {
+        super(`Cannot reach server at ${API_BASE_URL}${endpoint}`);
+        this.name = 'NetworkError';
+        this.endpoint = endpoint;
+        if (cause instanceof Error && cause.stack) this.stack = cause.stack;
+    }
+}
+
+export class SessionExpiredError extends Error {
+    constructor() {
+        super('Session expired. Please login again.');
+        this.name = 'SessionExpiredError';
+    }
+}
+
 // Types matching backend DTOs
 export interface SignupRequest {
     username: string;
@@ -98,16 +121,16 @@ async function fetchWithAuth<T>(
         (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
     }
 
+    const doFetch = async (h: HeadersInit) =>
+        fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers: h });
+
     let response: Response;
     try {
-        response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            ...options,
-            headers,
-        });
+        response = await doFetch(headers);
     } catch (networkError: unknown) {
-        // Network error - server might not be running
-        console.error(`Network error calling ${endpoint}:`, networkError);
-        throw new Error(`Cannot connect to server. Make sure the backend is running on ${API_BASE_URL}`);
+        // fetch() rejected at network level — server unreachable, DNS, CORS
+        // preflight, or backend mid-restart. NOT an auth failure.
+        throw new NetworkError(endpoint, networkError);
     }
 
     // Handle 401 - try to refresh token
@@ -117,19 +140,21 @@ async function fetchWithAuth<T>(
             // Retry the original request with new token
             const newAccessToken = tokenStorage.getAccessToken();
             (headers as Record<string, string>)['Authorization'] = `Bearer ${newAccessToken}`;
-            const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
-                ...options,
-                headers,
-            });
+            let retryResponse: Response;
+            try {
+                retryResponse = await doFetch(headers);
+            } catch (networkError: unknown) {
+                throw new NetworkError(endpoint, networkError);
+            }
             if (!retryResponse.ok) {
                 const error = await retryResponse.json();
                 throw new Error(error.message || 'Request failed');
             }
             return retryResponse.json();
         } else {
-            // Refresh failed, clear tokens
+            // Refresh failed — refresh token genuinely invalid. Clear and signal.
             tokenStorage.clearTokens();
-            throw new Error('Session expired. Please login again.');
+            throw new SessionExpiredError();
         }
     }
 
@@ -154,26 +179,29 @@ async function fetchWithAuth<T>(
     return response.json();
 }
 
-// Try to refresh the access token
+// Try to refresh the access token. Throws NetworkError if the refresh endpoint
+// is unreachable, so callers don't mistake a backend blip for an invalid refresh
+// token and prematurely clear the session.
 async function tryRefreshToken(): Promise<boolean> {
     const refreshToken = tokenStorage.getRefreshToken();
     if (!refreshToken) return false;
 
+    let response: Response;
     try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refreshToken }),
         });
-
-        if (!response.ok) return false;
-
-        const result: ApiResponse<TokenResponse> = await response.json();
-        tokenStorage.setTokens(result.data.accessToken, result.data.refreshToken);
-        return true;
-    } catch {
-        return false;
+    } catch (networkError: unknown) {
+        throw new NetworkError('/api/auth/refresh', networkError);
     }
+
+    if (!response.ok) return false;
+
+    const result: ApiResponse<TokenResponse> = await response.json();
+    tokenStorage.setTokens(result.data.accessToken, result.data.refreshToken);
+    return true;
 }
 
 // Auth API functions

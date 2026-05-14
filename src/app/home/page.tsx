@@ -369,6 +369,7 @@ export default function HomePage() {
                           <SelectItem value="COREF">Coreference Resolution</SelectItem>
                           <SelectItem value="NER">Named Entity Recognition</SelectItem>
                           <SelectItem value="POS">Part-of-Speech Tagging</SelectItem>
+                          <SelectItem value="WSD">Word-Sense Disambiguation</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

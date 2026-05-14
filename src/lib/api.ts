@@ -942,6 +942,46 @@ export const wsdApi = {
     },
 };
 
+// ==================== POS Tag Definitions (custom tags) ====================
+
+export type PosTagScope = 'GLOBAL' | 'WORKSPACE';
+
+export interface PosTagDefinition {
+    id: string | null;
+    tag: string;
+    description: string | null;
+    scope: PosTagScope;
+    workspaceId: string | null;
+    builtin: boolean;
+}
+
+export interface CreatePosTagRequest {
+    tag: string;
+    description?: string | null;
+    scope: PosTagScope;
+    workspaceId?: string | null;
+}
+
+export const posTagApi = {
+    list: async (workspaceId?: string): Promise<ApiResponse<PosTagDefinition[]>> => {
+        const qs = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : '';
+        return fetchWithAuth<ApiResponse<PosTagDefinition[]>>(`/api/pos-tags${qs}`);
+    },
+
+    create: async (request: CreatePosTagRequest): Promise<ApiResponse<PosTagDefinition>> => {
+        return fetchWithAuth<ApiResponse<PosTagDefinition>>('/api/pos-tags', {
+            method: 'POST',
+            body: JSON.stringify(request),
+        });
+    },
+
+    delete: async (definitionId: string): Promise<ApiResponse<void>> => {
+        return fetchWithAuth<ApiResponse<void>>(`/api/pos-tags/${definitionId}`, {
+            method: 'DELETE',
+        });
+    },
+};
+
 // ==================== POS Tagset (Universal Dependencies) ====================
 
 export interface PosTag {
@@ -950,6 +990,9 @@ export interface PosTag {
     description: string;
     color: string;
     shortcut?: string;
+    builtin?: boolean;
+    definitionId?: string | null;
+    scope?: PosTagScope;
 }
 
 export const UNIVERSAL_POS_TAGS: PosTag[] = [

@@ -8,10 +8,22 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/lib/auth';
 import {
   editorApi,
   posApi,
+  posTagApi,
   documentApi,
   workspaceApi,
   WorkspaceEditorResponse,
@@ -19,8 +31,34 @@ import {
   TokenDto,
   UNIVERSAL_POS_TAGS,
   PosTag,
+  PosTagDefinition,
+  PosTagScope,
   PosAnnotation,
 } from '@/lib/api';
+
+const CUSTOM_TAG_PALETTE = [
+  '#0ea5e9', '#22c55e', '#f97316', '#a855f7', '#eab308',
+  '#ec4899', '#14b8a6', '#f43f5e', '#6366f1', '#84cc16',
+];
+
+function mergeTagDefinitions(defs: PosTagDefinition[]): PosTag[] {
+  const builtinByTag = new Map(UNIVERSAL_POS_TAGS.map(t => [t.tag, t]));
+  const merged: PosTag[] = UNIVERSAL_POS_TAGS.map(t => ({ ...t, builtin: true }));
+  let customIdx = 0;
+  for (const d of defs) {
+    if (d.builtin || builtinByTag.has(d.tag)) continue;
+    merged.push({
+      tag: d.tag,
+      label: d.tag,
+      description: d.description ?? '',
+      color: CUSTOM_TAG_PALETTE[customIdx++ % CUSTOM_TAG_PALETTE.length],
+      builtin: false,
+      definitionId: d.id,
+      scope: d.scope,
+    });
+  }
+  return merged;
+}
 
 interface PosEditorProps {
   workspaceId: string;
@@ -47,6 +85,31 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
 
   // All annotators' POS tags for the current document, keyed by tokenId.
   const [annotationsByToken, setAnnotationsByToken] = useState<Record<string, PosAnnotation[]>>({});
+
+  // Effective tag set for this workspace (universal + global customs + workspace customs).
+  const [availableTags, setAvailableTags] = useState<PosTag[]>(() =>
+    UNIVERSAL_POS_TAGS.map(t => ({ ...t, builtin: true })));
+
+  // Add-tag dialog state
+  const [showAddTagDialog, setShowAddTagDialog] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagDescription, setNewTagDescription] = useState('');
+  const [newTagScope, setNewTagScope] = useState<PosTagScope>('WORKSPACE');
+  const [addTagError, setAddTagError] = useState<string | null>(null);
+  const [addingTag, setAddingTag] = useState(false);
+
+  const refreshTags = useCallback(async () => {
+    try {
+      const res = await posTagApi.list(workspaceId);
+      setAvailableTags(mergeTagDefinitions(res.data || []));
+    } catch {
+      // Fall back to universal tags only — already initialised in state.
+    }
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (workspaceId) refreshTags();
+  }, [workspaceId, refreshTags]);
 
   const currentUser = user?.username ?? null;
 
@@ -301,7 +364,7 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
   // Get PosTag object for a given tag string
   const getPosTagInfo = (tag: string | null): PosTag | undefined => {
     if (!tag) return undefined;
-    return UNIVERSAL_POS_TAGS.find(t => t.tag === tag);
+    return availableTags.find(t => t.tag === tag);
   };
 
   // Remove POS tag from selected token
@@ -339,13 +402,14 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         const idx = selectedPosTag
-          ? UNIVERSAL_POS_TAGS.findIndex(t => t.tag === selectedPosTag.tag)
+          ? availableTags.findIndex(t => t.tag === selectedPosTag.tag)
           : -1;
-        const len = UNIVERSAL_POS_TAGS.length;
+        const len = availableTags.length;
+        if (len === 0) return;
         const next = e.key === 'ArrowDown'
           ? (idx + 1 + len) % len
           : (idx <= 0 ? len - 1 : idx - 1);
-        setSelectedPosTag(UNIVERSAL_POS_TAGS[next]);
+        setSelectedPosTag(availableTags[next]);
         return;
       }
 
@@ -366,7 +430,7 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
       }
 
       // POS tag shortcuts
-      const tag = UNIVERSAL_POS_TAGS.find(t => t.shortcut === e.key.toLowerCase());
+      const tag = availableTags.find(t => t.shortcut === e.key.toLowerCase());
       if (tag) {
         e.preventDefault();
         if (selectedTokenId) {
@@ -381,7 +445,7 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [advanceToNextToken, moveToPrevToken, clearSelectedTokenPos, selectedTokenId, selectedPosTag, applyPosTag]);
+  }, [advanceToNextToken, moveToPrevToken, clearSelectedTokenPos, selectedTokenId, selectedPosTag, applyPosTag, availableTags]);
 
   // Save session helper
   const saveSession = useCallback(async () => {
@@ -414,6 +478,43 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
     lastScrollRef.current = scrollTop;
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     scrollTimeoutRef.current = setTimeout(() => { saveSession(); }, 1000);
+  };
+
+  const openAddTagDialog = () => {
+    setNewTagName('');
+    setNewTagDescription('');
+    setNewTagScope('WORKSPACE');
+    setAddTagError(null);
+    setShowAddTagDialog(true);
+  };
+
+  const handleCreateTag = async () => {
+    setAddTagError(null);
+    const tag = newTagName.trim().toUpperCase();
+    if (!tag) {
+      setAddTagError('Tag is required');
+      return;
+    }
+    if (!/^[A-Z][A-Z0-9_]{0,19}$/.test(tag)) {
+      setAddTagError('Tag must start with a letter and contain only A-Z, 0-9, underscore (max 20 chars)');
+      return;
+    }
+    setAddingTag(true);
+    try {
+      await posTagApi.create({
+        tag,
+        description: newTagDescription.trim() || null,
+        scope: newTagScope,
+        workspaceId: newTagScope === 'WORKSPACE' ? workspaceId : null,
+      });
+      setShowAddTagDialog(false);
+      await refreshTags();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create tag';
+      setAddTagError(message);
+    } finally {
+      setAddingTag(false);
+    }
   };
 
   // Compute statistics
@@ -653,7 +754,7 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
           </div>
 
           <div className="p-3 space-y-1">
-            {UNIVERSAL_POS_TAGS.map((tag) => {
+            {availableTags.map((tag) => {
               const isActive = selectedPosTag?.tag === tag.tag;
               return (
                 <button
@@ -706,6 +807,16 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
               <kbd className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-mono ml-auto flex-shrink-0">
                 Del
               </kbd>
+            </button>
+
+            <button
+              className="w-full flex items-center gap-2.5 px-3 py-2 mt-1 rounded-lg text-left hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all"
+              onClick={openAddTagDialog}
+            >
+              <svg className="w-3 h-3 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="text-sm text-indigo-700 dark:text-indigo-400 font-medium">Add custom tag</span>
             </button>
           </div>
         </aside>
@@ -875,6 +986,96 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
           </div>
         </aside>
       </div>
+
+      <Dialog open={showAddTagDialog} onOpenChange={setShowAddTagDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add custom POS tag</DialogTitle>
+            <DialogDescription>
+              Define a tag beyond the 17 Universal Dependencies built-ins. Workspace-only
+              tags are visible to this workspace; global tags are visible everywhere.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="new-tag-name">Tag</Label>
+              <Input
+                id="new-tag-name"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value.toUpperCase())}
+                placeholder="e.g. NEG"
+                maxLength={20}
+                className="font-mono uppercase"
+              />
+              <p className="text-xs text-slate-500">
+                Uppercase, starts with a letter, letters/digits/underscore only (max 20).
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="new-tag-description">Description (optional)</Label>
+              <Textarea
+                id="new-tag-description"
+                value={newTagDescription}
+                onChange={(e) => setNewTagDescription(e.target.value)}
+                placeholder="What does this tag mean?"
+                rows={2}
+                maxLength={200}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Scope</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewTagScope('WORKSPACE')}
+                  className={`flex-1 px-3 py-2 rounded-lg border text-sm transition ${
+                    newTagScope === 'WORKSPACE'
+                      ? 'border-[var(--primary)] bg-indigo-50 dark:bg-indigo-900/20 text-[var(--primary)]'
+                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="font-medium">This workspace</div>
+                  <div className="text-xs text-slate-500">Visible only here</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewTagScope('GLOBAL')}
+                  className={`flex-1 px-3 py-2 rounded-lg border text-sm transition ${
+                    newTagScope === 'GLOBAL'
+                      ? 'border-[var(--primary)] bg-indigo-50 dark:bg-indigo-900/20 text-[var(--primary)]'
+                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="font-medium">Global</div>
+                  <div className="text-xs text-slate-500">Visible across workspaces</div>
+                </button>
+              </div>
+            </div>
+
+            {addTagError && (
+              <div className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                {addTagError}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowAddTagDialog(false)}
+              disabled={addingTag}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleCreateTag} disabled={addingTag}>
+              {addingTag ? 'Adding…' : 'Add tag'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

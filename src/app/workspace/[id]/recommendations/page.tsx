@@ -9,8 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import {
   recommendationsApi,
   editorApi,
+  workspaceApi,
   Recommendation,
   RecommendationPriority,
+  AnnotationType,
 } from '@/lib/api';
 
 const VISIBLE_BY_DEFAULT = 10;
@@ -37,6 +39,7 @@ export default function RecommendationsPage() {
 
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [liveDocumentIds, setLiveDocumentIds] = useState<Set<string>>(new Set());
+  const [annotationType, setAnnotationType] = useState<AnnotationType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -48,12 +51,14 @@ export default function RecommendationsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [recRes, docsRes] = await Promise.all([
+      const [recRes, docsRes, wsRes] = await Promise.all([
         recommendationsApi.list(workspaceId),
         editorApi.getWorkspaceDocuments(workspaceId),
+        workspaceApi.getById(workspaceId),
       ]);
       setRecommendations(recRes.data);
       setLiveDocumentIds(new Set(docsRes.data.map(d => d.id)));
+      setAnnotationType(wsRes.data.annotationType as AnnotationType);
     } catch (err) {
       console.error(err);
       setError('Failed to load recommendations.');
@@ -156,19 +161,34 @@ export default function RecommendationsPage() {
 
           {loading && <p className="text-sm text-slate-500">Loading…</p>}
 
-          {!loading && recommendations.length === 0 && (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <p className="text-lg font-medium text-slate-700 dark:text-slate-300">
-                  Great coverage — no annotation gaps found
-                </p>
-                <p className="text-sm text-slate-500 mt-2">
-                  Recommendations re-appear automatically as new mentions, clusters, and
-                  documents are added.
-                </p>
-              </CardContent>
-            </Card>
-          )}
+          {!loading && recommendations.length === 0 && (() => {
+            // Recommendation rules currently look only at coref data
+            // (mentions, clusters, repeated forms). Branch the empty-state
+            // copy by workspace type and document presence so users don't
+            // mistake "no data yet" for "system is broken".
+            let title: string;
+            let body: string;
+            if (annotationType && annotationType !== 'COREF') {
+              title = `Recommendations aren't available for ${annotationType} workspaces yet`;
+              body = 'Suggestions are currently powered by coreference rules (unfinished mentions, density gaps, repeated forms, chain gaps). Rules for other annotation types are tracked separately.';
+            } else if (liveDocumentIds.size === 0) {
+              title = 'Upload a document to get started';
+              body = 'Recommendations appear once this workspace has at least one document with annotations. Head to the workspace home to upload.';
+            } else {
+              title = 'No gaps detected';
+              body = 'Every document has annotations and every mention has a cluster. Add new mentions or documents and suggestions reappear automatically.';
+            }
+            return (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <p className="text-lg font-medium text-slate-700 dark:text-slate-300">
+                    {title}
+                  </p>
+                  <p className="text-sm text-slate-500 mt-2">{body}</p>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {!loading && visible.map(rec => {
             const isDeletedDoc = rec.documentId !== null && !liveDocumentIds.has(rec.documentId);

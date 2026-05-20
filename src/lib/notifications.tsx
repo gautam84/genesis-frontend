@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Client, IMessage } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
-import { Notification, notificationApi, tokenStorage } from './api';
+import { API_BASE_URL, Notification, notificationApi, tokenStorage } from './api';
 import { useAuth } from './auth';
 
 interface NotificationContextType {
@@ -53,8 +53,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
 
         const accessToken = tokenStorage.getAccessToken();
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-        const socketUrl = `${apiUrl}/ws`;
+        const socketUrl = `${API_BASE_URL}/ws`;
 
         // Create client with auto-reconnect and authentication headers
         const client = new Client({

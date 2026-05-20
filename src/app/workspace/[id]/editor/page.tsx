@@ -4,14 +4,16 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { AuthGuard } from '@/components/auth-guard';
 import { workspaceApi, AnnotationType } from '@/lib/api';
+import { isOneOf } from '@/lib/utils';
 import CorefEditor from './coref-editor';
 import PosEditor from './pos-editor';
 import WsdEditor from './wsd-editor';
 import NerEditor from './ner-editor';
 
+const ANNOTATION_TYPES: readonly AnnotationType[] = ['COREF', 'NER', 'POS', 'WSD'];
+
 export default function EditorPage() {
-  const params = useParams();
-  const workspaceId = params.id as string;
+  const { id: workspaceId } = useParams<{ id: string }>();
 
   const [annotationType, setAnnotationType] = useState<AnnotationType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,7 +23,11 @@ export default function EditorPage() {
     const loadAnnotationType = async () => {
       try {
         const res = await workspaceApi.getById(workspaceId);
-        setAnnotationType(res.data.annotationType as AnnotationType);
+        if (isOneOf(res.data.annotationType, ANNOTATION_TYPES)) {
+          setAnnotationType(res.data.annotationType);
+        } else {
+          throw new Error(`Unknown annotation type from server: ${res.data.annotationType}`);
+        }
       } catch (err) {
         console.error('Failed to load workspace:', err);
         setError('Failed to determine annotation type for this workspace.');

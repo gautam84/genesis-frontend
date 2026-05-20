@@ -33,9 +33,8 @@ function typeLabel(t: Recommendation['type']): string {
 }
 
 export default function RecommendationsPage() {
-  const params = useParams();
+  const { id: workspaceId } = useParams<{ id: string }>();
   const router = useRouter();
-  const workspaceId = params.id as string;
 
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [liveDocumentIds, setLiveDocumentIds] = useState<Set<string>>(new Set());

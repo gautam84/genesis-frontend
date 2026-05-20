@@ -15,7 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { authApi, SignupRequest } from '@/lib/api';
+import { SignupRequest } from '@/lib/api';
+import { signupAction } from '@/lib/actions/auth';
 import { useAuth } from '@/lib/auth';
 
 export default function SignUpPage() {
@@ -111,7 +112,11 @@ export default function SignUpPage() {
         organizationName: formData.organization || undefined,
       };
 
-      await authApi.signup(signupData);
+      const result = await signupAction(signupData);
+      if (!result.ok) {
+        setApiError(result.error);
+        return;
+      }
       router.push('/login?registered=true');
     } catch (err) {
       setApiError(err instanceof Error ? err.message : 'Registration failed. Please try again.');

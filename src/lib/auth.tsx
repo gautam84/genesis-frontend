@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { authApi, tokenStorage, UserResponse, NetworkError, SessionExpiredError } from './api';
+import { tokenStorage, UserResponse } from './api';
+import { getSessionAction, loginAction, logoutAction } from './actions/auth';
 
 interface AuthContextType {
     user: UserResponse | null;
@@ -21,47 +22,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();
 
     const refreshUser = useCallback(async () => {
-        if (!tokenStorage.hasTokens()) {
-            setUser(null);
+        // Cookie is the source of truth. The action reads the HttpOnly access
+        // cookie server-side, refreshes if needed, and returns the user — or
+        // null when there's no valid session. localStorage is mirrored only
+        // because legacy data fetchers still send Bearer headers.
+        const result = await getSessionAction();
+
+        if (!result.ok) {
+            // Transient network failure. Keep whatever we had — don't clobber
+            // a live session because the backend blinked.
+            console.warn('Auth check failed: backend unreachable. Keeping session.');
             setIsLoading(false);
             return;
         }
 
-        // One quick retry on transient network errors so we ride through a
-        // brief backend restart / deploy without clobbering the session.
-        const attempt = async () => {
-            try {
-                return await authApi.getMe();
-            } catch (err) {
-                if (err instanceof NetworkError) {
-                    await new Promise((r) => setTimeout(r, 800));
-                    return await authApi.getMe();
-                }
-                throw err;
-            }
-        };
-
-        try {
-            const response = await attempt();
-            setUser(response.data);
-        } catch (err) {
-            if (err instanceof SessionExpiredError) {
-                // Refresh token genuinely invalid; tokens already cleared by fetchWithAuth.
-                setUser(null);
-            } else if (err instanceof NetworkError) {
-                // Server unreachable even after retry. Keep tokens — user is still
-                // logged in once the backend comes back. Surface as logged-out for
-                // this render so AuthGuard can show a connection state.
-                console.warn('Auth check failed: backend unreachable. Keeping session.');
-                setUser(null);
-            } else {
-                // Real auth failure (403/etc) or unexpected — clear and start over.
-                tokenStorage.clearTokens();
-                setUser(null);
-            }
-        } finally {
-            setIsLoading(false);
+        if (result.data) {
+            setUser(result.data);
+        } else {
+            // Server says no valid session. Drop the localStorage mirror so
+            // the legacy Bearer fetchers don't keep firing with a dead token.
+            tokenStorage.clearTokens();
+            setUser(null);
         }
+        setIsLoading(false);
     }, []);
 
     // Check authentication status on mount
@@ -72,7 +55,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const login = async (usernameOrEmail: string, password: string) => {
         setIsLoading(true);
         try {
-            await authApi.login({ usernameOrEmail, password });
+            const result = await loginAction({ usernameOrEmail, password });
+            if (!result.ok) {
+                setIsLoading(false);
+                throw new Error(result.error);
+            }
+            // HttpOnly cookies are the new source of truth (set by the action),
+            // but the existing client-side Bearer fetchers still read from
+            // localStorage. Mirror until the data layer migrates off Bearer.
+            tokenStorage.setTokens(result.data.accessToken, result.data.refreshToken);
             await refreshUser();
         } catch (error) {
             setIsLoading(false);
@@ -81,7 +72,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const logout = async () => {
-        await authApi.logout();
+        await logoutAction();
+        tokenStorage.clearTokens();
         setUser(null);
         router.push('/login');
     };

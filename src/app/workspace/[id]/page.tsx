@@ -38,6 +38,13 @@ import {
 import { AuthGuard } from '@/components/auth-guard';
 import { LogOut, Settings, User } from 'lucide-react';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
+import { isOneOf } from '@/lib/utils';
+
+const DOCUMENT_FILTERS = ['all', 'completed', 'in-progress', 'unannotated'] as const;
+type DocumentFilter = (typeof DOCUMENT_FILTERS)[number];
+const MEMBER_ROLES: readonly MemberRole[] = ['ADMIN', 'CURATOR', 'ANNOTATOR'];
+const EXPORT_FORMATS = Object.values(ExportFormat) as readonly ExportFormat[];
+const COLUMN2_MODES = Object.values(Column2Mode) as readonly Column2Mode[];
 
 // Icons (using inline SVGs for now)
 const Icons = {
@@ -93,9 +100,8 @@ const Icons = {
 type SidebarItem = 'getting-started' | 'documents' | 'collaborators' | 'schema' | 'settings';
 
 export default function WorkspacePage() {
-  const params = useParams();
+  const { id: workspaceId } = useParams<{ id: string }>();
   const router = useRouter();
-  const workspaceId = params.id as string;
   const { user, logout } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -111,7 +117,7 @@ export default function WorkspacePage() {
   const isAdmin = currentUserRole === 'ADMIN';
 
   const [activeSection, setActiveSection] = useState<SidebarItem>('getting-started');
-  const [documentFilter, setDocumentFilter] = useState<'all' | 'completed' | 'in-progress' | 'unannotated'>('all');
+  const [documentFilter, setDocumentFilter] = useState<DocumentFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Settings state
@@ -689,7 +695,7 @@ export default function WorkspacePage() {
                       />
                     </div>
                   </div>
-                  <Tabs value={documentFilter} onValueChange={(value) => setDocumentFilter(value as typeof documentFilter)} className="w-auto">
+                  <Tabs value={documentFilter} onValueChange={(value) => { if (isOneOf(value, DOCUMENT_FILTERS)) setDocumentFilter(value); }} className="w-auto">
                     <TabsList>
                       <TabsTrigger value="all">All</TabsTrigger>
                       <TabsTrigger value="completed">Completed</TabsTrigger>
@@ -821,7 +827,7 @@ export default function WorkspacePage() {
                             <Label htmlFor="role">Role</Label>
                             <Select
                               value={newMemberRole}
-                              onValueChange={(value) => setNewMemberRole(value as MemberRole)}
+                              onValueChange={(value) => { if (isOneOf(value, MEMBER_ROLES)) setNewMemberRole(value); }}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="Select a role" />
@@ -874,7 +880,7 @@ export default function WorkspacePage() {
                           <div className="flex items-center gap-4">
                             <Select
                               value={member.role}
-                              onValueChange={(value) => handleUpdateRole(member.userId, value as MemberRole)}
+                              onValueChange={(value) => { if (isOneOf(value, MEMBER_ROLES)) handleUpdateRole(member.userId, value); }}
                               disabled={!isAdmin || user?.id === member.userId}
                             >
                               <SelectTrigger className="w-[130px]">
@@ -1027,7 +1033,7 @@ export default function WorkspacePage() {
                 <Label htmlFor="exportFormat">Export Format</Label>
                 <Select
                   value={exportFormat}
-                  onValueChange={(value) => setExportFormat(value as ExportFormat)}
+                  onValueChange={(value) => { if (isOneOf(value, EXPORT_FORMATS)) setExportFormat(value); }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select format" />
@@ -1045,7 +1051,7 @@ export default function WorkspacePage() {
               <Label htmlFor="column2Mode">Column 2 Mode</Label>
               <Select
                 value={column2Mode}
-                onValueChange={(value) => setColumn2Mode(value as Column2Mode)}
+                onValueChange={(value) => { if (isOneOf(value, COLUMN2_MODES)) setColumn2Mode(value); }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select mode" />

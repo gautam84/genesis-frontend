@@ -570,12 +570,18 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
     }
   }, [workspaceId, currentDocIndex, isSaving, editorData, loading]);
 
-  // Save on unmount only
+  // Save on unmount only. saveSession's identity changes every render (its deps
+  // include state that updates frequently), so we read it via ref to keep the
+  // cleanup truly unmount-scoped.
+  const saveSessionRef = useRef(saveSession);
+  useEffect(() => {
+    saveSessionRef.current = saveSession;
+  });
   useEffect(() => {
     return () => {
-      saveSession();
+      saveSessionRef.current();
     };
-  }, [saveSession]);
+  }, []);
 
   // Debounced scroll save
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1030,7 +1036,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
                           ? 'Click to deselect'
                           : 'Click to select for merge'
                         : canAssign
-                          ? `Click to add "${selectedMention!.text}" to this cluster`
+                          ? `Click to add "${selectedMention?.text ?? ''}" to this cluster`
                           : ''
                     }
                   >

@@ -353,9 +353,14 @@ export default function NerEditor({ workspaceId }: NerEditorProps) {
     }
   }, [workspaceId, currentDocIndex, isSaving, editorData, loading]);
 
+  // Save on unmount only — read via ref so deps changes don't refire cleanup.
+  const saveSessionRef = useRef(saveSession);
   useEffect(() => {
-    return () => { saveSession(); };
-  }, [saveSession]);
+    saveSessionRef.current = saveSession;
+  });
+  useEffect(() => {
+    return () => { saveSessionRef.current(); };
+  }, []);
 
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {

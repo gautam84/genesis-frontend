@@ -10,9 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { wsdApi, WsdSense } from '@/lib/api';
 
 export default function WsdSensesAdminPage() {
-  const params = useParams();
+  const { id: workspaceId } = useParams<{ id: string }>();
   const router = useRouter();
-  const workspaceId = params.id as string;
 
   const [senses, setSenses] = useState<WsdSense[]>([]);
   const [loading, setLoading] = useState(true);

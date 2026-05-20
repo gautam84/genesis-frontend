@@ -2,7 +2,11 @@
  * API client for Genesis backend
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+if (!process.env.NEXT_PUBLIC_API_URL && process.env.NODE_ENV === 'production') {
+    throw new Error('NEXT_PUBLIC_API_URL must be set in production builds');
+}
+
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 /**
  * Thrown when the request never reached the server (DNS, offline, CORS preflight,

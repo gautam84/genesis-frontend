@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
@@ -100,8 +100,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
             initialDocIndex = savedSession.lastDocumentIndex;
             console.log('Restoring to document index:', initialDocIndex);
           }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (sessionErr: any) {
+        } catch (sessionErr) {
           console.warn('No saved session:', sessionErr);
         }
 
@@ -140,8 +139,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
                   }
                 }, 500); // Longer delay to ensure DOM is rendered
               }
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } catch (contentErr: any) {
+            } catch (contentErr) {
               console.warn('Document content not available:', contentErr);
             }
           }
@@ -155,17 +153,16 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
           ]);
           setMentions(mentionsRes.data);
           setClusters(clustersRes.data);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (annotErr: any) {
+        } catch (annotErr) {
           console.warn('Annotations not available:', annotErr);
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
+      } catch (err) {
         console.error('Failed to load workspace:', err);
-        if (err.message?.includes('Cannot connect')) {
+        const message = err instanceof Error ? err.message : '';
+        if (message.includes('Cannot connect')) {
           setError('Cannot connect to the backend server. Please ensure the Genesis backend is running on port 3003.');
         } else {
-          setError(err.message || 'Failed to load editor. Make sure the backend is running and the workspace exists.');
+          setError(message || 'Failed to load editor. Make sure the backend is running and the workspace exists.');
         }
       } finally {
         setLoading(false);
@@ -189,8 +186,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
         lastDocumentIndex: docIndex,
         scrollPosition: scrollPos,
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (saveErr: any) {
+    } catch (saveErr) {
       console.warn('Failed to save session:', saveErr);
     }
 
@@ -204,8 +200,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
       const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, docId, 0, PAGE_SIZE);
       setDocumentContent(contentRes.data);
       setCurrentDocIndex(docIndex);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to load document:', err);
     }
   };
@@ -318,8 +313,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
         setLinkingFromMention(newMention);
         setSelectedMention(newMention);
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to create mention:', err);
     }
   };
@@ -369,8 +363,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
       // Refresh clusters
       const clustersRes = await corefApi.getClusters(workspaceId);
       setClusters(clustersRes.data);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to link mentions:', err);
     }
   };
@@ -380,8 +373,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
     try {
       await corefApi.deleteMention(mentionId);
       setMentions(prev => prev.filter(m => m.id !== mentionId));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to delete mention:', err);
     }
   };
@@ -399,8 +391,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
       ]);
       setClusters(clustersRes.data);
       setMentions(mentionsRes.data);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to delete cluster:', err);
     }
   };
@@ -475,10 +466,9 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
       setSelectedClusterIds(new Set());
       setSelectMode(false);
       setShowMergeConfirm(false);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to merge clusters:', err);
-      setMergeError(err?.message || 'Failed to merge clusters');
+      setMergeError(err instanceof Error ? err.message : 'Failed to merge clusters');
     } finally {
       setMerging(false);
     }
@@ -498,8 +488,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
       setMentions(mentionsRes.data);
       setClusters(clustersRes.data);
       setSelectedMention(null); // Clear selection after assignment
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to assign to cluster:', err);
     }
   };
@@ -577,8 +566,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
           pageSize: next.data.pageSize,
         };
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       console.warn('Failed to load next page:', err);
     } finally {
       loadingMoreRef.current = false;
@@ -865,7 +853,6 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
                 )}
               </Button>
               <Avatar className="cursor-pointer ring-2 ring-white dark:ring-slate-800">
-                <AvatarImage src="" alt="User avatar" />
                 <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
                   {user?.firstName?.charAt(0) || user?.username?.charAt(0) || 'U'}
                 </AvatarFallback>

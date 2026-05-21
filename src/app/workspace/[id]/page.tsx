@@ -3,15 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { Download, LogOut, Play, Settings, Tag, Upload, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +15,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/auth';
 import {
   workspaceApi,
@@ -32,72 +28,14 @@ import {
   importExportApi,
   ExportFormat,
   Column2Mode,
-  ExportOptions
+  ExportOptions,
 } from '@/lib/api';
-// import { formatDistanceToNow } from 'date-fns';
 import { AuthGuard } from '@/components/auth-guard';
-import { LogOut, Settings, User } from 'lucide-react';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
-import { isOneOf } from '@/lib/utils';
-
-const DOCUMENT_FILTERS = ['all', 'completed', 'in-progress', 'unannotated'] as const;
-type DocumentFilter = (typeof DOCUMENT_FILTERS)[number];
-const MEMBER_ROLES: readonly MemberRole[] = ['ADMIN', 'CURATOR', 'ANNOTATOR'];
-const EXPORT_FORMATS = Object.values(ExportFormat) as readonly ExportFormat[];
-const COLUMN2_MODES = Object.values(Column2Mode) as readonly Column2Mode[];
-
-// Icons (using inline SVGs for now)
-const Icons = {
-  home: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-    </svg>
-  ),
-  play: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  download: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-    </svg>
-  ),
-  upload: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-    </svg>
-  ),
-  file: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
-  ),
-  users: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-    </svg>
-  ),
-  tag: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-    </svg>
-  ),
-  settings: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  ),
-  back: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-    </svg>
-  ),
-};
-
-type SidebarItem = 'getting-started' | 'documents' | 'collaborators' | 'schema' | 'settings';
+import { Sidebar, SidebarItem } from './_components/Sidebar';
+import { DocumentGrid, DocumentFilter } from './_components/DocumentGrid';
+import { MemberManagement } from './_components/MemberManagement';
+import { ExportDialog } from './_components/ExportDialog';
 
 export default function WorkspacePage() {
   const { id: workspaceId } = useParams<{ id: string }>();
@@ -112,7 +50,6 @@ export default function WorkspacePage() {
   const [members, setMembers] = useState<MemberResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Computed role for current user
   const currentUserRole = members.find(m => m.userId === user?.id)?.role;
   const isAdmin = currentUserRole === 'ADMIN';
 
@@ -126,11 +63,12 @@ export default function WorkspacePage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Member management state
-  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
-  const [newMemberEmail, setNewMemberEmail] = useState('');
-  const [newMemberRole, setNewMemberRole] = useState<MemberRole>('ANNOTATOR');
-  const [isAddingMember, setIsAddingMember] = useState(false);
+  // Export state
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>(ExportFormat.SEPARATE_FILES_ZIP);
+  const [column2Mode, setColumn2Mode] = useState<Column2Mode>(Column2Mode.PART_NUMBER);
+  const [exportTargetId, setExportTargetId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     if (workspaceId && user) {
@@ -169,7 +107,7 @@ export default function WorkspacePage() {
       const [wsRes, docRes, memRes] = await Promise.all([
         workspaceApi.getById(workspaceId),
         documentApi.list(workspaceId),
-        workspaceApi.getMembers(workspaceId)
+        workspaceApi.getMembers(workspaceId),
       ]);
 
       setWorkspace(wsRes.data);
@@ -191,7 +129,7 @@ export default function WorkspacePage() {
       setIsUpdating(true);
       const req: UpdateWorkspaceRequest = {
         name: updatedName,
-        description: updatedDescription
+        description: updatedDescription,
       };
       const res = await workspaceApi.update(workspace.id, req);
       setWorkspace(res.data);
@@ -202,25 +140,17 @@ export default function WorkspacePage() {
     }
   };
 
-  const handleAddMember = async () => {
-    if (!newMemberEmail || !workspace) return;
+  const handleAddMember = async (email: string, role: MemberRole) => {
+    if (!workspace) return;
     try {
-      setIsAddingMember(true);
-      await workspaceApi.addMember(workspace.id, {
-        email: newMemberEmail,
-        role: newMemberRole
-      });
-      setIsAddMemberOpen(false);
-      setNewMemberEmail('');
-      setNewMemberRole('ANNOTATOR');
-      // Refresh members
+      await workspaceApi.addMember(workspace.id, { email, role });
       const memRes = await workspaceApi.getMembers(workspace.id);
       setMembers(memRes.data);
-    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    } catch (error: unknown) {
       console.error('Failed to add member:', error);
-      alert(`Failed to add member: ${error.message || 'Unknown error'}`);
-    } finally {
-      setIsAddingMember(false);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to add member: ${message}`);
+      throw error;
     }
   };
 
@@ -251,7 +181,6 @@ export default function WorkspacePage() {
     try {
       await documentApi.delete(documentId);
       setDocuments(documents.filter(d => d.id !== documentId));
-      // Refresh workspace stats as document count changes
       const wsRes = await workspaceApi.getById(workspace.id);
       setWorkspace(wsRes.data);
     } catch (error) {
@@ -278,33 +207,21 @@ export default function WorkspacePage() {
     try {
       setIsUploading(true);
       await documentApi.upload(workspace.id, file);
-      // Refresh documents
       const docRes = await documentApi.list(workspace.id);
       setDocuments(docRes.data);
-
-      // Refresh workspace stats
       const wsRes = await workspaceApi.getById(workspace.id);
       setWorkspace(wsRes.data);
     } catch (error) {
       console.error('Failed to upload document:', error);
     } finally {
       setIsUploading(false);
-      // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  // Export state
-  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
-  const [exportFormat, setExportFormat] = useState<ExportFormat>(ExportFormat.SEPARATE_FILES_ZIP);
-  const [column2Mode, setColumn2Mode] = useState<Column2Mode>(Column2Mode.PART_NUMBER);
-  const [exportTargetId, setExportTargetId] = useState<string | null>(null); // null for workspace, string for documentId
-  const [isExporting, setIsExporting] = useState(false);
-
   const openExportDialog = (documentId?: string) => {
     setExportTargetId(documentId || null);
     setIsExportDialogOpen(true);
-    // Reset to defaults
     setExportFormat(ExportFormat.SEPARATE_FILES_ZIP);
     setColumn2Mode(Column2Mode.PART_NUMBER);
   };
@@ -313,27 +230,18 @@ export default function WorkspacePage() {
     if (!workspace) return;
     try {
       setIsExporting(true);
-
-      let result: { blob: Blob; filename: string };
-
       const options: ExportOptions = {
-        column2Mode: column2Mode,
-        exportFormat: exportFormat,
+        column2Mode,
+        exportFormat,
         continueSentenceNumbers: true,
-        defaultPartNumber: 0
+        defaultPartNumber: 0,
       };
 
-      if (exportTargetId) {
-        // Document Export
-        result = await importExportApi.exportDocument(exportTargetId, options);
-      } else {
-        // Workspace Export
-        result = await importExportApi.exportWorkspace(workspace.id, options);
-      }
+      const result = exportTargetId
+        ? await importExportApi.exportDocument(exportTargetId, options)
+        : await importExportApi.exportWorkspace(workspace.id, options);
 
       const { blob, filename } = result;
-
-      // Trigger download
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -349,44 +257,6 @@ export default function WorkspacePage() {
     } finally {
       setIsExporting(false);
     }
-  };
-
-
-
-  // Filter documents
-  const filteredDocuments = documents.filter((doc) => {
-    // Basic status mapping - simplified for now
-    // In real app, you might map backend status string to these filter categories
-    const status = doc.status.toLowerCase(); // Backend: UPLOADED, IMPORTED, ANNOTATING, COMPLETE
-    let filterCategory = 'unannotated';
-    if (status === 'complete') filterCategory = 'completed';
-    else if (status === 'annotating') filterCategory = 'in-progress';
-    else filterCategory = 'unannotated';
-
-    const matchesFilter = documentFilter === 'all' || filterCategory === documentFilter;
-    const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
-
-  // Get status badge variant
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'COMPLETE':
-        return { variant: 'default' as const, label: 'Completed', color: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' };
-      case 'ANNOTATING':
-        return { variant: 'secondary' as const, label: 'In Progress', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' };
-      default:
-        return { variant: 'secondary' as const, label: 'Unannotated', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' };
-    }
-  };
-
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return 'Unknown logic';
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
   if (loading) {
@@ -419,7 +289,6 @@ export default function WorkspacePage() {
   return (
     <AuthGuard>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-        {/* Header */}
         <header className="border-b border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-8">
@@ -480,100 +349,13 @@ export default function WorkspacePage() {
         </header>
 
         <div className="flex max-w-7xl mx-auto">
-          {/* Sidebar */}
-          <aside className="w-64 border-r border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm min-h-[calc(100vh-73px)] sticky top-[73px]">
-            <div className="p-4">
-              <Button
-                variant="ghost"
-                className="w-full justify-start mb-6"
-                onClick={() => router.push('/home')}
-              >
-                <Icons.back />
-                <span className="ml-2">Back to Home</span>
-              </Button>
-
-              <nav className="space-y-1">
-                <button
-                  onClick={() => setActiveSection('getting-started')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'getting-started'
-                    ? 'bg-[var(--primary)] text-white shadow-md'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                >
-                  <Icons.home />
-                  <span className="font-medium">Getting Started</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveSection('documents')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'documents'
-                    ? 'bg-[var(--primary)] text-white shadow-md'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                >
-                  <Icons.file />
-                  <span className="font-medium">Documents</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveSection('collaborators')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'collaborators'
-                    ? 'bg-[var(--primary)] text-white shadow-md'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                >
-                  <Icons.users />
-                  <span className="font-medium">Collaborators</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveSection('schema')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'schema'
-                    ? 'bg-[var(--primary)] text-white shadow-md'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                >
-                  <Icons.tag />
-                  <span className="font-medium">Annotation Schema</span>
-                </button>
-
-                {isAdmin && (
-                  <button
-                    onClick={() => setActiveSection('settings')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${activeSection === 'settings'
-                      ? 'bg-[var(--primary)] text-white shadow-md'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                      }`}
-                  >
-                    <Icons.settings />
-                    <span className="font-medium">Settings</span>
-                  </button>
-                )}
-              </nav>
-
-              {/* Workspace Stats */}
-              <div className="mt-8 p-4 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Progress</h3>
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-slate-600 dark:text-slate-400">Completion</span>
-                      <span className="font-bold text-[var(--primary)]">{workspace.progressPercentage}%</span>
-                    </div>
-                    <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-[var(--primary)] to-purple-600 rounded-full"
-                        style={{ width: `${workspace.progressPercentage}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="text-xs text-slate-600 dark:text-slate-400">
-                    <p>{workspace.annotatedDocumentCount} / {workspace.documentCount} documents</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </aside>
+          <Sidebar
+            workspace={workspace}
+            activeSection={activeSection}
+            isAdmin={isAdmin}
+            onChangeSection={setActiveSection}
+            onBack={() => router.push('/home')}
+          />
 
           <main className="flex-1 p-8">
             <input
@@ -582,6 +364,7 @@ export default function WorkspacePage() {
               className="hidden"
               onChange={handleFileUpload}
             />
+
             {activeSection === 'getting-started' && (
               <div>
                 <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Getting Started</h2>
@@ -589,12 +372,10 @@ export default function WorkspacePage() {
                   <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
                     <CardHeader>
                       <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--primary)] to-blue-600 flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform">
-                        <Icons.play />
+                        <Play className="w-5 h-5" />
                       </div>
                       <CardTitle>Open Editor</CardTitle>
-                      <CardDescription>
-                        Start annotating documents in the annotation editor
-                      </CardDescription>
+                      <CardDescription>Start annotating documents in the annotation editor</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <Button className="w-full" onClick={() => router.push(`/workspace/${workspaceId}/editor`)}>
@@ -606,12 +387,10 @@ export default function WorkspacePage() {
                   <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
                     <CardHeader>
                       <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform">
-                        <Icons.download />
+                        <Download className="w-5 h-5" />
                       </div>
                       <CardTitle>Export Documents</CardTitle>
-                      <CardDescription>
-                        Download annotated documents in various formats
-                      </CardDescription>
+                      <CardDescription>Download annotated documents in various formats</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <Button variant="outline" className="w-full" onClick={() => openExportDialog()}>Export</Button>
@@ -621,12 +400,10 @@ export default function WorkspacePage() {
                   <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
                     <CardHeader>
                       <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform">
-                        <Icons.upload />
+                        <Upload className="w-5 h-5" />
                       </div>
                       <CardTitle>Import Documents</CardTitle>
-                      <CardDescription>
-                        Upload new documents to this workspace
-                      </CardDescription>
+                      <CardDescription>Upload new documents to this workspace</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <Button variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()}>
@@ -665,254 +442,29 @@ export default function WorkspacePage() {
             )}
 
             {activeSection === 'documents' && (
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Documents</h2>
-                  <Button className="gap-2" onClick={() => fileInputRef.current?.click()}>
-                    <Icons.upload />
-                    {isUploading ? 'Uploading...' : 'Upload Documents'}
-                  </Button>
-                </div>
-
-                {/* Filters and Search */}
-                <div className="flex flex-col md:flex-row gap-4 mb-6">
-                  <div className="flex-1">
-                    <div className="relative">
-                      <svg
-                        className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                      <Input
-                        type="search"
-                        placeholder="Search documents..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-12 h-11"
-                      />
-                    </div>
-                  </div>
-                  <Tabs value={documentFilter} onValueChange={(value) => { if (isOneOf(value, DOCUMENT_FILTERS)) setDocumentFilter(value); }} className="w-auto">
-                    <TabsList>
-                      <TabsTrigger value="all">All</TabsTrigger>
-                      <TabsTrigger value="completed">Completed</TabsTrigger>
-                      <TabsTrigger value="in-progress">In Progress</TabsTrigger>
-                      <TabsTrigger value="unannotated">Unannotated</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-
-                {/* Documents List */}
-                <div className="space-y-3">
-                  {filteredDocuments.length === 0 ? (
-                    <Card>
-                      <CardContent className="py-12 text-center">
-                        <Icons.file />
-                        <p className="text-slate-600 dark:text-slate-400 mt-4">No documents found</p>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    filteredDocuments.map((doc) => {
-                      const statusInfo = getStatusBadge(doc.status);
-                      return (
-                        <Card key={doc.id} className="hover:shadow-md transition-shadow">
-                          <CardContent className="flex items-center justify-between p-4">
-                            <div className="flex items-center gap-4 flex-1">
-                              <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                                <Icons.file />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-slate-900 dark:text-white truncate">
-                                  {doc.name}
-                                </p>
-                                <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400 mt-1">
-                                  <span>{formatFileSize(doc.fileSize)}</span>
-                                  <span>•</span>
-                                  <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
-                                </div>
-                                {(doc.progress !== undefined && doc.progress > 0) && (
-                                  <div className="mt-2 w-full max-w-xs">
-                                    <div className="flex justify-between text-[10px] mb-1 text-slate-500">
-                                      <span>Progress</span>
-                                      <span>{Math.round(doc.progress * 100)}%</span>
-                                    </div>
-                                    <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                      <div
-                                        className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                                        style={{ width: `${Math.round((doc.progress || 0) * 100)}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <Badge className={statusInfo.color}>
-                                {statusInfo.label}
-                              </Badge>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="gap-2"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  router.push(`/workspace/${workspaceId}/editor`);
-                                }}
-                              >
-                                <Icons.play />
-                                {doc.status === 'COMPLETE' ? 'View' : 'Annotate'}
-                              </Button>
-
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                    </svg>
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => openExportDialog(doc.id)}>
-                                    Export CoNLL
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => handleDeleteDocument(doc.id)} className="text-red-600">
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
+              <DocumentGrid
+                documents={documents}
+                filter={documentFilter}
+                onChangeFilter={setDocumentFilter}
+                searchQuery={searchQuery}
+                onChangeSearch={setSearchQuery}
+                isUploading={isUploading}
+                onUploadClick={() => fileInputRef.current?.click()}
+                onAnnotate={() => router.push(`/workspace/${workspaceId}/editor`)}
+                onExportDocument={openExportDialog}
+                onDeleteDocument={handleDeleteDocument}
+              />
             )}
 
             {activeSection === 'collaborators' && (
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Collaborators</h2>
-                  {isAdmin && (
-                    <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
-                      <DialogTrigger asChild>
-                        <Button className="gap-2">
-                          <Icons.users />
-                          Add Member
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add New Member</DialogTitle>
-                          <DialogDescription>
-                            Invite a user to collaborate on this workspace.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="email">Email Address</Label>
-                            <Input
-                              id="email"
-                              placeholder="user@example.com"
-                              value={newMemberEmail}
-                              onChange={(e) => setNewMemberEmail(e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="role">Role</Label>
-                            <Select
-                              value={newMemberRole}
-                              onValueChange={(value) => { if (isOneOf(value, MEMBER_ROLES)) setNewMemberRole(value); }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select a role" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="ADMIN">Admin</SelectItem>
-                                <SelectItem value="CURATOR">Curator</SelectItem>
-                                <SelectItem value="ANNOTATOR">Annotator</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setIsAddMemberOpen(false)}>Cancel</Button>
-                          <Button onClick={handleAddMember} disabled={isAddingMember}>
-                            {isAddingMember ? 'Adding...' : 'Add Member'}
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                </div>
-
-                <div className="space-y-4">
-                  {members.length === 0 ? (
-                    <Card>
-                      <CardContent className="py-12 text-center">
-                        <Icons.users />
-                        <p className="text-slate-600 dark:text-slate-400 mt-4">No collaborators yet</p>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    members.map((member) => (
-                      <Card key={member.userId}>
-                        <CardContent className="flex items-center justify-between p-6">
-                          <div className="flex items-center gap-4">
-                            <Avatar>
-                              <AvatarImage src="" alt={member.username} />
-                              <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
-                                {member.firstName ? member.firstName.charAt(0) : member.username.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-semibold text-slate-900 dark:text-white">
-                                {member.firstName} {member.lastName} ({member.username})
-                              </p>
-                              <p className="text-sm text-slate-600 dark:text-slate-400">{member.email}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <Select
-                              value={member.role}
-                              onValueChange={(value) => { if (isOneOf(value, MEMBER_ROLES)) handleUpdateRole(member.userId, value); }}
-                              disabled={!isAdmin || user?.id === member.userId}
-                            >
-                              <SelectTrigger className="w-[130px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="ADMIN">Admin</SelectItem>
-                                <SelectItem value="CURATOR">Curator</SelectItem>
-                                <SelectItem value="ANNOTATOR">Annotator</SelectItem>
-                              </SelectContent>
-                            </Select>
-
-                            {isAdmin && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                onClick={() => handleRemoveMember(member.userId)}
-                                disabled={user?.id === member.userId}
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </Button>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </div>
-              </div>
+              <MemberManagement
+                members={members}
+                isAdmin={isAdmin}
+                currentUserId={user?.id}
+                onAddMember={handleAddMember}
+                onRemoveMember={handleRemoveMember}
+                onUpdateRole={handleUpdateRole}
+              />
             )}
 
             {activeSection === 'schema' && (
@@ -930,11 +482,9 @@ export default function WorkspacePage() {
                 <Card>
                   <CardContent className="py-12 text-center">
                     <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <Icons.tag />
+                      <Tag className="w-5 h-5" />
                     </div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-                      Coming Soon
-                    </h3>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Coming Soon</h3>
                     <p className="text-slate-600 dark:text-slate-400 mb-6">
                       Advanced schema management will be available in the next update.
                     </p>
@@ -948,7 +498,6 @@ export default function WorkspacePage() {
                 <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Settings</h2>
 
                 <div className="space-y-6">
-                  {/* General Settings */}
                   <Card>
                     <CardHeader>
                       <CardTitle>General</CardTitle>
@@ -959,20 +508,14 @@ export default function WorkspacePage() {
                         <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                           Workspace Name
                         </label>
-                        <Input
-                          value={updatedName}
-                          onChange={(e) => setUpdatedName(e.target.value)}
-                        />
+                        <Input value={updatedName} onChange={(e) => setUpdatedName(e.target.value)} />
                       </div>
 
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                           Description
                         </label>
-                        <Input
-                          value={updatedDescription}
-                          onChange={(e) => setUpdatedDescription(e.target.value)}
-                        />
+                        <Input value={updatedDescription} onChange={(e) => setUpdatedDescription(e.target.value)} />
                       </div>
 
                       <div className="space-y-2">
@@ -991,7 +534,6 @@ export default function WorkspacePage() {
                     </CardContent>
                   </Card>
 
-                  {/* Danger Zone */}
                   <Card className="border-red-200 dark:border-red-900 mt-8">
                     <CardHeader>
                       <CardTitle className="text-red-600 dark:text-red-400">Danger Zone</CardTitle>
@@ -1015,62 +557,20 @@ export default function WorkspacePage() {
               </div>
             )}
           </main>
-        </div >
-      </div >
+        </div>
+      </div>
 
-
-      <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{exportTargetId ? 'Export Document' : 'Export Workspace'}</DialogTitle>
-            <DialogDescription>
-              Choose export options.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {!exportTargetId && (
-              <div className="space-y-2">
-                <Label htmlFor="exportFormat">Export Format</Label>
-                <Select
-                  value={exportFormat}
-                  onValueChange={(value) => { if (isOneOf(value, EXPORT_FORMATS)) setExportFormat(value); }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select format" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ExportFormat.SEPARATE_FILES_ZIP}>CoNLL-2012 (Zip)</SelectItem>
-                    <SelectItem value={ExportFormat.MERGED_SINGLE_FILE}>CoNLL-2012 (Merged)</SelectItem>
-                    <SelectItem value={ExportFormat.SEPARATE_FILES_ZIP_WITH_MERGED}>CoNLL-2012 (Zip + Merged)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="column2Mode">Column 2 Mode</Label>
-              <Select
-                value={column2Mode}
-                onValueChange={(value) => { if (isOneOf(value, COLUMN2_MODES)) setColumn2Mode(value); }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={Column2Mode.PART_NUMBER}>Part Number</SelectItem>
-                  <SelectItem value={Column2Mode.SENTENCE_NUMBER}>Sentence Number</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsExportDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleExportAction} disabled={isExporting}>
-              {isExporting ? 'Exporting...' : 'Export'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </AuthGuard >
+      <ExportDialog
+        open={isExportDialogOpen}
+        onOpenChange={setIsExportDialogOpen}
+        targetIsDocument={exportTargetId !== null}
+        format={exportFormat}
+        onChangeFormat={setExportFormat}
+        column2Mode={column2Mode}
+        onChangeColumn2Mode={setColumn2Mode}
+        isExporting={isExporting}
+        onExport={handleExportAction}
+      />
+    </AuthGuard>
   );
 }

@@ -27,7 +27,6 @@ import { createWorkspaceAction } from '@/lib/actions/workspace';
 import { LogOut, Settings, User } from 'lucide-react';
 import { formatDistanceToNow, isToday, isYesterday, subDays, isAfter, format } from 'date-fns';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
-import { FullScreenLoader } from '@/components/Spinner';
 
 interface HomeClientProps {
   initialWorkspaces: WorkspaceResponse[];
@@ -35,8 +34,8 @@ interface HomeClientProps {
 
 export function HomeClient({ initialWorkspaces }: HomeClientProps) {
   const router = useRouter();
-  const { user, logout, isLoading: authLoading } = useAuth();
-  const { isLoading: requireAuthLoading } = useRequireAuth();
+  const { user, logout } = useAuth();
+  useRequireAuth();
   const [workspaces, setWorkspaces] = useState<WorkspaceResponse[]>(initialWorkspaces);
   const [searchQuery, setSearchQuery] = useState('');
   const [isNewWorkspaceOpen, setIsNewWorkspaceOpen] = useState(false);
@@ -96,11 +95,6 @@ export function HomeClient({ initialWorkspaces }: HomeClientProps) {
       setIsLoggingOut(false);
     }
   };
-
-  // Show loading while checking auth
-  if (authLoading || requireAuthLoading) {
-    return <FullScreenLoader label="Loading..." />;
-  }
 
   const getUserInitials = () => {
     if (!user) return 'U';

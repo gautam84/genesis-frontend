@@ -9,7 +9,9 @@ export default async function HomePage() {
     return <HomeClient initialWorkspaces={workspaces} />;
   } catch (err) {
     if (err instanceof SessionExpiredError) {
-      redirect('/login');
+      // Route handler clears the stale cookies (RSC can't) before
+      // /login renders, avoiding a middleware bounce loop.
+      redirect('/api/auth/end-session');
     }
     throw err;
   }

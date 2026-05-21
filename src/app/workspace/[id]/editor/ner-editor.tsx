@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
@@ -557,7 +557,6 @@ export default function NerEditor({ workspaceId }: NerEditorProps) {
               {editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? 'Completed' : 'Mark Complete'}
             </Button>
             <Avatar className="cursor-pointer ring-2 ring-white dark:ring-slate-800">
-              <AvatarImage src="" alt="User avatar" />
               <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
                 {user?.firstName?.charAt(0) || user?.username?.charAt(0) || 'U'}
               </AvatarFallback>

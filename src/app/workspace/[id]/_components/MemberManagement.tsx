@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Trash2, Users } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -134,7 +134,6 @@ export function MemberManagement({
               <CardContent className="flex items-center justify-between p-6">
                 <div className="flex items-center gap-4">
                   <Avatar>
-                    <AvatarImage src="" alt={member.username} />
                     <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
                       {member.firstName ? member.firstName.charAt(0) : member.username.charAt(0)}
                     </AvatarFallback>

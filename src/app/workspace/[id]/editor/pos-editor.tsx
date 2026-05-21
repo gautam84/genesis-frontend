@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,7 @@ import {
   PosTagScope,
   PosAnnotation,
 } from '@/lib/api';
+import { useEditorSession } from '@/hooks/useEditorSession';
 
 const CUSTOM_TAG_PALETTE = [
   '#0ea5e9', '#22c55e', '#f97316', '#a855f7', '#eab308',
@@ -78,7 +79,6 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
   const [currentDocIndex, setCurrentDocIndex] = useState(0);
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [selectedPosTag, setSelectedPosTag] = useState<PosTag | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
 
   // Track local POS overrides (optimistic updates before API confirms)
   const [localPosMap, setLocalPosMap] = useState<Record<string, string | null>>({});
@@ -113,8 +113,12 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
 
   const currentUser = user?.username ?? null;
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const lastScrollRef = useRef(0);
+  const { saveSession, containerRef, lastScrollRef, handleScroll } = useEditorSession({
+    workspaceId,
+    currentDocIndex,
+    editorData,
+    loading,
+  });
 
   // Load workspace data on mount
   useEffect(() => {
@@ -195,7 +199,7 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
     if (workspaceId) {
       loadWorkspace();
     }
-  }, [workspaceId]);
+  }, [workspaceId, containerRef, lastScrollRef]);
 
   // Load document content when switching documents
   const loadDocumentContent = async (docIndex: number) => {
@@ -446,44 +450,6 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [advanceToNextToken, moveToPrevToken, clearSelectedTokenPos, selectedTokenId, selectedPosTag, applyPosTag, availableTags]);
-
-  // Save session helper
-  const saveSession = useCallback(async () => {
-    if (!workspaceId || isSaving || loading || !editorData) return;
-    try {
-      setIsSaving(true);
-      const scrollPos = containerRef.current ? containerRef.current.scrollTop : lastScrollRef.current;
-      if (containerRef.current) lastScrollRef.current = scrollPos;
-
-      await editorApi.saveSession({
-        workspaceId,
-        lastDocumentIndex: currentDocIndex,
-        scrollPosition: scrollPos,
-      });
-    } catch {
-      // Failed to save session
-    } finally {
-      setIsSaving(false);
-    }
-  }, [workspaceId, currentDocIndex, isSaving, editorData, loading]);
-
-  // Save on unmount only — read via ref so deps changes don't refire cleanup.
-  const saveSessionRef = useRef(saveSession);
-  useEffect(() => {
-    saveSessionRef.current = saveSession;
-  });
-  useEffect(() => {
-    return () => { saveSessionRef.current(); };
-  }, []);
-
-  // Debounced scroll save
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const scrollTop = e.currentTarget.scrollTop;
-    lastScrollRef.current = scrollTop;
-    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    scrollTimeoutRef.current = setTimeout(() => { saveSession(); }, 1000);
-  };
 
   const openAddTagDialog = () => {
     setNewTagName('');

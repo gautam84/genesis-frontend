@@ -27,6 +27,7 @@ import {
   MentionDto,
   ClusterDto,
 } from '@/lib/api';
+import { useEditorSession } from '@/hooks/useEditorSession';
 
 // Cluster colors palette
 const CLUSTER_COLORS = [
@@ -55,7 +56,6 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
   const [linkingFromMention, setLinkingFromMention] = useState<MentionDto | null>(null);
   const [selectedMention, setSelectedMention] = useState<MentionDto | null>(null); // For cluster assignment
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
 
   // Cluster merge state
   const [selectMode, setSelectMode] = useState(false);
@@ -64,12 +64,17 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
   const [merging, setMerging] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
 
-  const containerRef = useRef<HTMLDivElement>(null); // For scroll tracking on main element
-  const lastScrollRef = useRef(0); // Track last scroll position reliably for unmount saving
   const cardContentRef = useRef<HTMLDivElement>(null); // For arrow positioning
   const sentinelRef = useRef<HTMLDivElement>(null); // Bottom sentinel for infinite scroll
   const loadingMoreRef = useRef(false); // Guards re-entry into loadNextPage
   const [loadingMore, setLoadingMore] = useState(false);
+
+  const { saveSession, containerRef, lastScrollRef, handleScroll } = useEditorSession({
+    workspaceId,
+    currentDocIndex,
+    editorData,
+    loading,
+  });
 
   const PAGE_SIZE = 50;
 
@@ -169,7 +174,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
     if (workspaceId) {
       loadWorkspace();
     }
-  }, [workspaceId]);
+  }, [workspaceId, containerRef, lastScrollRef]);
 
   // Load document content when switching documents
   const loadDocumentContent = async (docIndex: number) => {
@@ -542,62 +547,6 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [cancelLinking]);
 
-  // Save session helper
-  const saveSession = useCallback(async () => {
-    if (!workspaceId || isSaving || loading || !editorData) return;
-
-    try {
-      setIsSaving(true);
-      // Use lastScrollRef if containerRef is null (e.g. during unmount)
-      const scrollPos = containerRef.current ? containerRef.current.scrollTop : lastScrollRef.current;
-
-      // Update ref if we have the element
-      if (containerRef.current) {
-        lastScrollRef.current = scrollPos;
-      }
-
-      await editorApi.saveSession({
-        workspaceId: workspaceId,
-        lastDocumentIndex: currentDocIndex,
-        scrollPosition: scrollPos,
-      });
-      console.log('Session saved:', { docIndex: currentDocIndex, scroll: scrollPos });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      console.warn('Failed to save session:', err);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [workspaceId, currentDocIndex, isSaving, editorData, loading]);
-
-  // Save on unmount only. saveSession's identity changes every render (its deps
-  // include state that updates frequently), so we read it via ref to keep the
-  // cleanup truly unmount-scoped.
-  const saveSessionRef = useRef(saveSession);
-  useEffect(() => {
-    saveSessionRef.current = saveSession;
-  });
-  useEffect(() => {
-    return () => {
-      saveSessionRef.current();
-    };
-  }, []);
-
-  // Debounced scroll save
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const scrollTop = e.currentTarget.scrollTop;
-    lastScrollRef.current = scrollTop;
-
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-    }
-
-    scrollTimeoutRef.current = setTimeout(() => {
-      saveSession();
-    }, 1000); // Debounce save 1s after scroll stops
-  };
-
   // Append next page of sentences/tokens to current document content
   const loadNextPage = useCallback(async () => {
     if (loadingMoreRef.current) return;
@@ -655,7 +604,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [documentContent, loadNextPage]);
+  }, [documentContent, loadNextPage, containerRef]);
 
   // Render tokens with annotations
   const renderTokenizedText = () => {

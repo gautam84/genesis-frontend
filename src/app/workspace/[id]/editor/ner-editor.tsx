@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,7 @@ import {
   NerTagScope,
   NerAnnotation,
 } from '@/lib/api';
+import { useEditorSession } from '@/hooks/useEditorSession';
 
 const CUSTOM_TAG_PALETTE = [
   '#0ea5e9', '#22c55e', '#f97316', '#a855f7', '#eab308',
@@ -76,7 +77,6 @@ export default function NerEditor({ workspaceId }: NerEditorProps) {
   // UI state
   const [currentDocIndex, setCurrentDocIndex] = useState(0);
   const [annotations, setAnnotations] = useState<NerAnnotation[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
 
   // Span selection: clicking a token sets the anchor (first end of span). Clicking
   // a second token resolves to [min, max] as a pending span; the user then picks a
@@ -114,8 +114,12 @@ export default function NerEditor({ workspaceId }: NerEditorProps) {
 
   const currentUserId = user?.id ?? null;
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const lastScrollRef = useRef(0);
+  const { saveSession, containerRef, lastScrollRef, handleScroll } = useEditorSession({
+    workspaceId,
+    currentDocIndex,
+    editorData,
+    loading,
+  });
 
   // Load workspace + first document on mount
   useEffect(() => {
@@ -196,7 +200,7 @@ export default function NerEditor({ workspaceId }: NerEditorProps) {
     if (workspaceId) {
       loadWorkspace();
     }
-  }, [workspaceId]);
+  }, [workspaceId, containerRef, lastScrollRef]);
 
   const loadDocumentContent = async (docIndex: number) => {
     if (!editorData || docIndex >= editorData.documents.length) return;
@@ -333,42 +337,6 @@ export default function NerEditor({ workspaceId }: NerEditorProps) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  // Session save on unmount
-  const saveSession = useCallback(async () => {
-    if (!workspaceId || isSaving || loading || !editorData) return;
-    try {
-      setIsSaving(true);
-      const scrollPos = containerRef.current ? containerRef.current.scrollTop : lastScrollRef.current;
-      if (containerRef.current) lastScrollRef.current = scrollPos;
-      await editorApi.saveSession({
-        workspaceId,
-        lastDocumentIndex: currentDocIndex,
-        scrollPosition: scrollPos,
-      });
-    } catch {
-      // Session save failed — not fatal
-    } finally {
-      setIsSaving(false);
-    }
-  }, [workspaceId, currentDocIndex, isSaving, editorData, loading]);
-
-  // Save on unmount only — read via ref so deps changes don't refire cleanup.
-  const saveSessionRef = useRef(saveSession);
-  useEffect(() => {
-    saveSessionRef.current = saveSession;
-  });
-  useEffect(() => {
-    return () => { saveSessionRef.current(); };
-  }, []);
-
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const scrollTop = e.currentTarget.scrollTop;
-    lastScrollRef.current = scrollTop;
-    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    scrollTimeoutRef.current = setTimeout(() => { saveSession(); }, 1000);
-  };
 
   const openAddTagDialog = () => {
     setNewTagName('');

@@ -37,6 +37,7 @@ import { Sidebar, SidebarItem } from './_components/Sidebar';
 import { DocumentGrid, DocumentFilter } from './_components/DocumentGrid';
 import { MemberManagement } from './_components/MemberManagement';
 import { ExportDialog } from './_components/ExportDialog';
+import { toast } from 'sonner';
 
 export default function WorkspacePage() {
   const { id: workspaceId } = useParams<{ id: string }>();
@@ -150,7 +151,7 @@ export default function WorkspacePage() {
     } catch (error: unknown) {
       console.error('Failed to add member:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Failed to add member: ${message}`);
+      toast.error(`Failed to add member: ${message}`);
       throw error;
     }
   };
@@ -162,7 +163,7 @@ export default function WorkspacePage() {
       setMembers(members.filter(m => m.userId !== userId));
     } catch (error) {
       console.error('Failed to remove member:', error);
-      alert('Failed to remove member.');
+      toast.error('Failed to remove member.');
     }
   };
 
@@ -173,7 +174,7 @@ export default function WorkspacePage() {
       setMembers(members.map(m => m.userId === userId ? { ...m, role: newRole } : m));
     } catch (error) {
       console.error('Failed to update role:', error);
-      alert('Failed to update role.');
+      toast.error('Failed to update role.');
     }
   };
 
@@ -186,7 +187,7 @@ export default function WorkspacePage() {
       setWorkspace(wsRes.data);
     } catch (error) {
       console.error('Failed to delete document:', error);
-      alert('Failed to delete document.');
+      toast.error('Failed to delete document.');
     }
   };
 
@@ -197,7 +198,7 @@ export default function WorkspacePage() {
       router.push('/home');
     } catch (error) {
       console.error('Failed to delete workspace:', error);
-      alert('Failed to delete workspace.');
+      toast.error('Failed to delete workspace.');
     }
   };
 
@@ -254,7 +255,7 @@ export default function WorkspacePage() {
       setIsExportDialogOpen(false);
     } catch (error) {
       console.error('Failed to export:', error);
-      alert('Failed to export.');
+      toast.error('Failed to export.');
     } finally {
       setIsExporting(false);
     }
@@ -301,7 +302,7 @@ export default function WorkspacePage() {
               <NotificationDropdown />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Avatar className="cursor-pointer ring-2 ring-white dark:ring-slate-800 hover:shadow-lg transition-shadow">
+                  <Avatar aria-label="User menu" className="cursor-pointer ring-2 ring-white dark:ring-slate-800 hover:shadow-lg transition-shadow">
                     <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
                       {getUserInitials()}
                     </AvatarFallback>

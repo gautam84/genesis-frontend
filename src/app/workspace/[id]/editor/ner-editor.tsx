@@ -36,6 +36,7 @@ import {
 } from '@/lib/api';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { FullScreenLoader } from '@/components/Spinner';
+import { toast } from 'sonner';
 
 const CUSTOM_TAG_PALETTE = [
   '#0ea5e9', '#22c55e', '#f97316', '#a855f7', '#eab308',
@@ -276,7 +277,7 @@ export default function NerEditor({ workspaceId }: NerEditorProps) {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create span';
       console.error('Failed to create NER span:', message);
-      alert(message);
+      toast.error(message);
     }
   };
 

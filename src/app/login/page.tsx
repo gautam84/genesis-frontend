@@ -4,20 +4,29 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/lib/auth';
 import { FullScreenLoader, Spinner } from '@/components/Spinner';
+import { loginSchema, LoginFormValues } from '@/lib/validation/auth';
 
 export default function LoginPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading, login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { usernameOrEmail: '', password: '' },
+  });
 
   // Redirect to home if already authenticated
   useEffect(() => {
@@ -26,18 +35,13 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, authLoading, router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError('');
-
+  const onSubmit = async (values: LoginFormValues) => {
+    setSubmitError('');
     try {
-      await login(email, password);
+      await login(values.usernameOrEmail, values.password);
       // Don't manually redirect - let the useEffect above handle it
-      // This prevents race conditions
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
-      setIsLoading(false);
+      setSubmitError(err instanceof Error ? err.message : 'Login failed. Please try again.');
     }
   };
 
@@ -78,31 +82,31 @@ export default function LoginPage() {
             Welcome back
           </h2>
 
-          {/* Error Message */}
-          {error && (
+          {/* Submit error (e.g. wrong credentials) */}
+          {submitError && (
             <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              <p className="text-sm text-red-600 dark:text-red-400">{submitError}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Input */}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
             <div>
-              <Label htmlFor="email" className="text-slate-700 dark:text-slate-300 font-medium mb-2">
+              <Label htmlFor="usernameOrEmail" className="text-slate-700 dark:text-slate-300 font-medium mb-2">
                 Email or Username
               </Label>
               <Input
-                id="email"
+                id="usernameOrEmail"
                 type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
                 placeholder="you@example.com or username"
                 className="h-12 rounded-xl"
+                aria-invalid={!!errors.usernameOrEmail}
+                {...register('usernameOrEmail')}
               />
+              {errors.usernameOrEmail && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.usernameOrEmail.message}</p>
+              )}
             </div>
 
-            {/* Password Input */}
             <div>
               <Label htmlFor="password" className="text-slate-700 dark:text-slate-300 font-medium mb-2">
                 Password
@@ -110,15 +114,16 @@ export default function LoginPage() {
               <Input
                 id="password"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
                 placeholder="Enter your password"
                 className="h-12 rounded-xl"
+                aria-invalid={!!errors.password}
+                {...register('password')}
               />
+              {errors.password && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.password.message}</p>
+              )}
             </div>
 
-            {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between text-sm">
               <label className="flex items-center cursor-pointer group gap-2">
                 <Checkbox id="remember" />
@@ -128,21 +133,19 @@ export default function LoginPage() {
               </label>
               <Link
                 href="#"
-                className="text-[var(--primary)] hover:text-[var(--primary-dark)]
-                         transition-colors font-semibold"
+                className="text-[var(--primary)] hover:text-[var(--primary-dark)] transition-colors font-semibold"
               >
                 Forgot password?
               </Link>
             </div>
 
-            {/* Submit Button */}
             <Button
               type="submit"
-              disabled={isLoading || authLoading}
+              disabled={isSubmitting || authLoading}
               className="w-full mt-8"
               size="lg"
             >
-              {(isLoading || authLoading) ? (
+              {(isSubmitting || authLoading) ? (
                 <span className="flex items-center gap-2">
                   <Spinner className="h-5 w-5 text-current" />
                   Signing in...

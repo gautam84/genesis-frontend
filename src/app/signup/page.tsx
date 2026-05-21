@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,27 +17,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { SignupRequest } from '@/lib/api';
 import { signupAction } from '@/lib/actions/auth';
 import { useAuth } from '@/lib/auth';
 import { FullScreenLoader, Spinner } from '@/components/Spinner';
+import { signupSchema, SignupFormValues } from '@/lib/validation/auth';
 
 export default function SignUpPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const [formData, setFormData] = useState({
-    username: '',
-    firstName: '',
-    lastName: '',
-    email: '',
-    organization: '',
-    role: '',
-    password: '',
-    confirmPassword: '',
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState('');
+  // Role field is collected for UX but not part of the SignupRequest yet.
+  // Kept outside react-hook-form so it doesn't pollute the validated schema.
+  const [role, setRole] = useState('');
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<SignupFormValues>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: {
+      username: '',
+      firstName: '',
+      lastName: '',
+      email: '',
+      organization: '',
+      password: '',
+      confirmPassword: '',
+    },
+  });
 
   // Redirect to home if already authenticated
   useEffect(() => {
@@ -44,76 +54,17 @@ export default function SignUpPage() {
     }
   }, [isAuthenticated, authLoading, router]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
-    }
+  const onSubmit = async (values: SignupFormValues) => {
     setApiError('');
-  };
-
-  const handleRoleChange = (value: string) => {
-    setFormData((prev) => ({ ...prev, role: value }));
-    if (errors.role) {
-      setErrors((prev) => ({ ...prev, role: '' }));
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.username.trim()) {
-      newErrors.username = 'Username is required';
-    } else if (formData.username.length < 3) {
-      newErrors.username = 'Username must be at least 3 characters';
-    }
-    if (!formData.firstName.trim()) {
-      newErrors.firstName = 'First name is required';
-    }
-    if (!formData.lastName.trim()) {
-      newErrors.lastName = 'Last name is required';
-    }
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
-    }
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
-    if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsLoading(true);
-    setApiError('');
-
     try {
-      const signupData: SignupRequest = {
-        username: formData.username,
-        email: formData.email,
-        password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        organizationName: formData.organization || undefined,
-      };
-
-      const result = await signupAction(signupData);
+      const result = await signupAction({
+        username: values.username,
+        email: values.email,
+        password: values.password,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        organizationName: values.organization || undefined,
+      });
       if (!result.ok) {
         setApiError(result.error);
         return;
@@ -121,8 +72,6 @@ export default function SignUpPage() {
       router.push('/login?registered=true');
     } catch (err) {
       setApiError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -169,27 +118,24 @@ export default function SignUpPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Username */}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
             <div>
               <Label htmlFor="username" className="text-slate-700 dark:text-slate-300 font-medium">
                 Username <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="username"
-                name="username"
                 type="text"
-                value={formData.username}
-                onChange={handleInputChange}
                 className={`h-11 rounded-xl ${errors.username ? 'border-red-500' : ''}`}
                 placeholder="johndoe"
+                aria-invalid={!!errors.username}
+                {...register('username')}
               />
               {errors.username && (
-                <p className="text-sm text-red-500 mt-1">{errors.username}</p>
+                <p className="text-sm text-red-500 mt-1">{errors.username.message}</p>
               )}
             </div>
 
-            {/* Name Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="firstName" className="text-slate-700 dark:text-slate-300 font-medium">
@@ -197,15 +143,14 @@ export default function SignUpPage() {
                 </Label>
                 <Input
                   id="firstName"
-                  name="firstName"
                   type="text"
-                  value={formData.firstName}
-                  onChange={handleInputChange}
                   className={`h-11 rounded-xl ${errors.firstName ? 'border-red-500' : ''}`}
                   placeholder="John"
+                  aria-invalid={!!errors.firstName}
+                  {...register('firstName')}
                 />
                 {errors.firstName && (
-                  <p className="text-sm text-red-500 mt-1">{errors.firstName}</p>
+                  <p className="text-sm text-red-500 mt-1">{errors.firstName.message}</p>
                 )}
               </div>
 
@@ -215,60 +160,53 @@ export default function SignUpPage() {
                 </Label>
                 <Input
                   id="lastName"
-                  name="lastName"
                   type="text"
-                  value={formData.lastName}
-                  onChange={handleInputChange}
                   className={`h-11 rounded-xl ${errors.lastName ? 'border-red-500' : ''}`}
                   placeholder="Doe"
+                  aria-invalid={!!errors.lastName}
+                  {...register('lastName')}
                 />
                 {errors.lastName && (
-                  <p className="text-sm text-red-500 mt-1">{errors.lastName}</p>
+                  <p className="text-sm text-red-500 mt-1">{errors.lastName.message}</p>
                 )}
               </div>
             </div>
 
-            {/* Email */}
             <div>
               <Label htmlFor="email" className="text-slate-700 dark:text-slate-300 font-medium">
                 Email address <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="email"
-                name="email"
                 type="email"
-                value={formData.email}
-                onChange={handleInputChange}
                 className={`h-11 rounded-xl ${errors.email ? 'border-red-500' : ''}`}
                 placeholder="you@example.com"
+                aria-invalid={!!errors.email}
+                {...register('email')}
               />
               {errors.email && (
-                <p className="text-sm text-red-500 mt-1">{errors.email}</p>
+                <p className="text-sm text-red-500 mt-1">{errors.email.message}</p>
               )}
             </div>
 
-            {/* Organization */}
             <div>
               <Label htmlFor="organization" className="text-slate-700 dark:text-slate-300 font-medium">
                 Organization / Team
               </Label>
               <Input
                 id="organization"
-                name="organization"
                 type="text"
-                value={formData.organization}
-                onChange={handleInputChange}
                 className="h-11 rounded-xl"
                 placeholder="Your organization name (optional)"
+                {...register('organization')}
               />
             </div>
 
-            {/* Role */}
             <div>
               <Label htmlFor="role" className="text-slate-700 dark:text-slate-300 font-medium">
                 Role
               </Label>
-              <Select value={formData.role} onValueChange={handleRoleChange}>
+              <Select value={role} onValueChange={setRole}>
                 <SelectTrigger className="h-11 rounded-xl">
                   <SelectValue placeholder="Select your role (optional)" />
                 </SelectTrigger>
@@ -282,7 +220,6 @@ export default function SignUpPage() {
               </Select>
             </div>
 
-            {/* Password Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="password" className="text-slate-700 dark:text-slate-300 font-medium">
@@ -290,15 +227,14 @@ export default function SignUpPage() {
                 </Label>
                 <Input
                   id="password"
-                  name="password"
                   type="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
                   className={`h-11 rounded-xl ${errors.password ? 'border-red-500' : ''}`}
                   placeholder="Min. 6 characters"
+                  aria-invalid={!!errors.password}
+                  {...register('password')}
                 />
                 {errors.password && (
-                  <p className="text-sm text-red-500 mt-1">{errors.password}</p>
+                  <p className="text-sm text-red-500 mt-1">{errors.password.message}</p>
                 )}
               </div>
 
@@ -308,20 +244,18 @@ export default function SignUpPage() {
                 </Label>
                 <Input
                   id="confirmPassword"
-                  name="confirmPassword"
                   type="password"
-                  value={formData.confirmPassword}
-                  onChange={handleInputChange}
                   className={`h-11 rounded-xl ${errors.confirmPassword ? 'border-red-500' : ''}`}
                   placeholder="Re-enter password"
+                  aria-invalid={!!errors.confirmPassword}
+                  {...register('confirmPassword')}
                 />
                 {errors.confirmPassword && (
-                  <p className="text-sm text-red-500 mt-1">{errors.confirmPassword}</p>
+                  <p className="text-sm text-red-500 mt-1">{errors.confirmPassword.message}</p>
                 )}
               </div>
             </div>
 
-            {/* Terms and Conditions */}
             <div className="flex items-start gap-2 text-sm pt-2">
               <Checkbox id="terms" required className="mt-0.5" />
               <label htmlFor="terms" className="text-slate-600 dark:text-slate-400 cursor-pointer">
@@ -336,14 +270,13 @@ export default function SignUpPage() {
               </label>
             </div>
 
-            {/* Submit Button */}
             <Button
               type="submit"
-              disabled={isLoading}
+              disabled={isSubmitting}
               className="w-full mt-6"
               size="lg"
             >
-              {isLoading ? (
+              {isSubmitting ? (
                 <span className="flex items-center gap-2">
                   <Spinner className="h-5 w-5 text-current" />
                   Creating your account...

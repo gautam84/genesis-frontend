@@ -45,41 +45,24 @@ export async function clearSessionCookies() {
  * Server-side authenticated fetch to Spring.
  *
  * Behaviour:
- * - Throws `SessionExpiredError` when there's no access cookie, when the
- *   refresh cookie is missing/invalid, or when refresh itself returns
- *   non-2xx. Cookies are cleared in those terminal cases.
+ * - When the access cookie is missing but the refresh cookie is present
+ *   (the common case once the short-lived access token expires), attempts
+ *   `/api/auth/refresh` before treating the session as gone. Same path
+ *   runs on a 401 from the upstream call.
+ * - Throws `SessionExpiredError` only when refresh is unavailable: no
+ *   refresh cookie, or the refresh endpoint rejects. Cookies are cleared
+ *   in those terminal cases.
  * - Throws `NetworkError` when the request never reaches the server
  *   (DNS/TCP/CORS preflight). Cookies are kept — backend blip, not auth.
  * - Throws a plain `Error` carrying the server's message on 4xx/5xx.
  *
  * Callers are typically server components or actions that should
- * `redirect('/login')` on `SessionExpiredError`; middleware already
- * blocks unauthenticated navigation, so reaching this code with no
- * session means the tokens expired mid-request.
+ * `redirect('/login')` on `SessionExpiredError`.
  */
 export async function serverFetch<T>(endpoint: string, init?: RequestInit): Promise<T> {
   const jar = await cookies();
-  let accessToken = jar.get(ACCESS_COOKIE)?.value;
-  if (!accessToken) {
-    throw new SessionExpiredError();
-  }
 
-  const doFetch = async (token: string): Promise<Response> => {
-    const headers = new Headers(init?.headers);
-    headers.set('Authorization', `Bearer ${token}`);
-    if (init?.body && !headers.has('Content-Type')) {
-      headers.set('Content-Type', 'application/json');
-    }
-    try {
-      return await fetch(`${API_BASE_URL}${endpoint}`, { ...init, headers });
-    } catch (cause) {
-      throw new NetworkError(`${API_BASE_URL}${endpoint}`, cause);
-    }
-  };
-
-  let response = await doFetch(accessToken);
-
-  if (response.status === 401) {
+  const refreshAccessToken = async (): Promise<string> => {
     const refreshToken = jar.get(REFRESH_COOKIE)?.value;
     if (!refreshToken) {
       await clearSessionCookies();
@@ -104,7 +87,28 @@ export async function serverFetch<T>(endpoint: string, init?: RequestInit): Prom
 
     const refreshed: ApiResponse<TokenResponse> = await refreshResponse.json();
     await setSessionCookies(refreshed.data);
-    accessToken = refreshed.data.accessToken;
+    return refreshed.data.accessToken;
+  };
+
+  let accessToken = jar.get(ACCESS_COOKIE)?.value ?? (await refreshAccessToken());
+
+  const doFetch = async (token: string): Promise<Response> => {
+    const headers = new Headers(init?.headers);
+    headers.set('Authorization', `Bearer ${token}`);
+    if (init?.body && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+    try {
+      return await fetch(`${API_BASE_URL}${endpoint}`, { ...init, headers });
+    } catch (cause) {
+      throw new NetworkError(`${API_BASE_URL}${endpoint}`, cause);
+    }
+  };
+
+  let response = await doFetch(accessToken);
+
+  if (response.status === 401) {
+    accessToken = await refreshAccessToken();
     response = await doFetch(accessToken);
   }
 

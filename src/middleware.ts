@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 const ACCESS_COOKIE = 'genesis_access_token';
+const REFRESH_COOKIE = 'genesis_refresh_token';
 
 // Routes that require an authenticated session. Anything not matching here
 // (e.g. /signup verification flows) passes through; AuthGuard / page-level
@@ -12,7 +13,12 @@ const GUEST_ONLY_PREFIXES = ['/login', '/signup'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const hasSession = request.cookies.has(ACCESS_COOKIE);
+  // Presence-check only — the access cookie expires before the refresh
+  // cookie, so a refresh-only request still represents a usable session.
+  // serverFetch will perform the actual refresh; if it fails it clears
+  // cookies and the page redirects to /login.
+  const hasSession =
+    request.cookies.has(ACCESS_COOKIE) || request.cookies.has(REFRESH_COOKIE);
 
   if (PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) && !hasSession) {
     const url = request.nextUrl.clone();

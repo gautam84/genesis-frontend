@@ -8,43 +8,19 @@ import type {
   TokenResponse,
   UserResponse,
 } from '@/lib/api';
+import { SessionExpiredError } from '@/lib/errors';
+import {
+  REFRESH_COOKIE,
+  clearSessionCookies,
+  serverFetch,
+  setSessionCookies,
+} from '@/lib/server/api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-
-// Same names as localStorage keys so the migration path is greppable.
-// HttpOnly cookies are the new source of truth; the localStorage copy is
-// kept in sync only because the existing client-side fetchWithAuth still
-// reads Bearer tokens from there. Future PR rips out localStorage.
-const ACCESS_COOKIE = 'genesis_access_token';
-const REFRESH_COOKIE = 'genesis_refresh_token';
-
-const REFRESH_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 type ActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string };
-
-function baseCookieOptions() {
-  return {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
-    path: '/',
-  };
-}
-
-async function setSessionCookies(tokens: TokenResponse) {
-  const jar = await cookies();
-  const opts = baseCookieOptions();
-  jar.set(ACCESS_COOKIE, tokens.accessToken, { ...opts, maxAge: tokens.expiresIn });
-  jar.set(REFRESH_COOKIE, tokens.refreshToken, { ...opts, maxAge: REFRESH_MAX_AGE_SECONDS });
-}
-
-async function clearSessionCookies() {
-  const jar = await cookies();
-  jar.delete(ACCESS_COOKIE);
-  jar.delete(REFRESH_COOKIE);
-}
 
 export async function loginAction(
   request: LoginRequest,
@@ -114,61 +90,17 @@ export async function signupAction(
  * caller can keep the current session optimistically.
  */
 export async function getSessionAction(): Promise<ActionResult<UserResponse | null>> {
-  const jar = await cookies();
-  const accessToken = jar.get(ACCESS_COOKIE)?.value;
-  if (!accessToken) {
-    return { ok: true, data: null };
-  }
-
-  let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-  } catch {
-    return { ok: false, error: `Cannot reach server at ${API_BASE_URL}` };
-  }
-
-  if (response.status === 401) {
-    // Access expired; try refresh.
-    const refreshToken = jar.get(REFRESH_COOKIE)?.value;
-    if (!refreshToken) {
-      await clearSessionCookies();
+    const result = await serverFetch<ApiResponse<UserResponse>>('/api/auth/me');
+    return { ok: true, data: result.data };
+  } catch (err) {
+    if (err instanceof SessionExpiredError) {
+      // serverFetch already cleared cookies in the terminal-failure branch.
       return { ok: true, data: null };
     }
-    let refreshResponse: Response;
-    try {
-      refreshResponse = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
-    } catch {
-      return { ok: false, error: `Cannot reach server at ${API_BASE_URL}` };
-    }
-    if (!refreshResponse.ok) {
-      await clearSessionCookies();
-      return { ok: true, data: null };
-    }
-    const refreshed: ApiResponse<TokenResponse> = await refreshResponse.json();
-    await setSessionCookies(refreshed.data);
-    // Retry /me with the new access token
-    try {
-      response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${refreshed.data.accessToken}` },
-      });
-    } catch {
-      return { ok: false, error: `Cannot reach server at ${API_BASE_URL}` };
-    }
+    // Transient network failure — keep the session optimistically.
+    return { ok: false, error: err instanceof Error ? err.message : 'Network error' };
   }
-
-  if (!response.ok) {
-    await clearSessionCookies();
-    return { ok: true, data: null };
-  }
-
-  const result: ApiResponse<UserResponse> = await response.json();
-  return { ok: true, data: result.data };
 }
 
 export async function logoutAction(): Promise<{ ok: true }> {
@@ -191,3 +123,4 @@ export async function logoutAction(): Promise<{ ok: true }> {
   await clearSessionCookies();
   return { ok: true };
 }
+

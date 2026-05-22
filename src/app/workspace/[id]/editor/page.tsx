@@ -35,7 +35,7 @@ export default async function EditorPage({
 
   switch (annotationType) {
     case 'COREF':
-      return <CorefEditor workspaceId={id} />;
+      return <CorefEditor workspaceId={id} workspaceName={workspaceName} />;
     case 'NER':
       return <NerEditor workspaceId={id} workspaceName={workspaceName} />;
     case 'POS':

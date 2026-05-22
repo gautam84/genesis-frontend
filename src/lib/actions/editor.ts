@@ -1,10 +1,17 @@
 'use server';
 
-import type { DocumentContentResponse, EditorDocumentInfo } from '@/lib/api';
+import type {
+  DocumentContentResponse,
+  EditorDocumentInfo,
+  EditorSessionResponse,
+  SaveSessionRequest,
+} from '@/lib/api';
 import { SessionExpiredError } from '@/lib/errors';
 import {
   getDocumentContent,
+  getSession,
   getWorkspaceDocuments,
+  saveSession,
 } from '@/lib/server/editor';
 
 type ActionResult<T> =
@@ -40,5 +47,27 @@ export async function getDocumentContentAction(
     return { ok: true, data };
   } catch (err) {
     return toError(err, 'Failed to load document content.');
+  }
+}
+
+export async function getEditorSessionAction(
+  workspaceId: string,
+): Promise<ActionResult<EditorSessionResponse | null>> {
+  try {
+    const data = await getSession(workspaceId);
+    return { ok: true, data };
+  } catch (err) {
+    return toError(err, 'Failed to load editor session.');
+  }
+}
+
+export async function saveEditorSessionAction(
+  request: SaveSessionRequest,
+): Promise<ActionResult<EditorSessionResponse>> {
+  try {
+    const data = await saveSession(request);
+    return { ok: true, data };
+  } catch (err) {
+    return toError(err, 'Failed to save editor session.');
   }
 }

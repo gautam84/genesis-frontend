@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { editorApi, WorkspaceEditorResponse } from '@/lib/api';
+import { WorkspaceEditorResponse } from '@/lib/api';
+import { saveEditorSessionAction } from '@/lib/actions/editor';
 
 interface UseEditorSessionParams {
   workspaceId: string;
@@ -42,7 +43,7 @@ export function useEditorSession({
         : lastScrollRef.current;
       if (containerRef.current) lastScrollRef.current = scrollPos;
 
-      await editorApi.saveSession({
+      await saveEditorSessionAction({
         workspaceId,
         lastDocumentIndex: currentDocIndex,
         scrollPosition: scrollPos,

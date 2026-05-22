@@ -7,21 +7,28 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth';
 import {
-  editorApi,
-  wsdApi,
-  workspaceApi,
-  WorkspaceEditorResponse,
-  DocumentContentResponse,
-  TokenDto,
-  WsdSense,
-  WsdAnnotation,
+  type WorkspaceEditorResponse,
+  type DocumentContentResponse,
+  type TokenDto,
+  type WsdSense,
+  type WsdAnnotation,
 } from '@/lib/api';
+import {
+  getDocumentContentAction,
+  getEditorDocumentsAction,
+} from '@/lib/actions/editor';
+import {
+  getAnnotationsForTokenAction,
+  listSensesAction,
+  upsertAnnotationAction,
+} from '@/lib/actions/wsd';
 
 interface WsdEditorProps {
   workspaceId: string;
+  workspaceName: string;
 }
 
-export default function WsdEditor({ workspaceId }: WsdEditorProps) {
+export default function WsdEditor({ workspaceId, workspaceName }: WsdEditorProps) {
   const router = useRouter();
   const { user } = useAuth();
   const currentUser = user?.username ?? null;
@@ -40,93 +47,91 @@ export default function WsdEditor({ workspaceId }: WsdEditorProps) {
   // tokenId → list of all annotations on that token, across annotators.
   const [annotationsByToken, setAnnotationsByToken] = useState<Record<string, WsdAnnotation[]>>({});
 
-  // Load workspace + first document content.
+  const loadDocumentAt = useCallback(
+    async (idx: number, documents: WorkspaceEditorResponse['documents']) => {
+      const doc = documents[idx];
+      if (!doc || !doc.isTokenized || doc.tokenCount === 0) {
+        setDocumentContent(null);
+        return;
+      }
+      setCurrentDocIndex(idx);
+      setSelectedToken(null);
+      const result = await getDocumentContentAction(workspaceId, doc.id);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setDocumentContent(result.data);
+      setAnnotationsByToken({});
+    },
+    [workspaceId],
+  );
+
   useEffect(() => {
-    const load = async () => {
+    if (!workspaceId) return;
+    let cancelled = false;
+    (async () => {
       setLoading(true);
       setError(null);
-      try {
-        const [docsRes, wsRes] = await Promise.all([
-          editorApi.getWorkspaceDocuments(workspaceId),
-          workspaceApi.getById(workspaceId),
-        ]);
-        const documents = docsRes.data;
-
-        setEditorData({
-          workspaceId,
-          workspaceName: wsRes.data.name,
-          annotationType: 'WSD',
-          documents,
-          session: null,
-          totalDocuments: documents.length,
-          totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
-          totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
-        });
-
-        if (documents.length > 0) {
-          await loadDocumentAt(0, documents);
-        }
-      } catch (err) {
-        console.error(err);
-        setError('Failed to load workspace.');
-      } finally {
+      const docsResult = await getEditorDocumentsAction(workspaceId);
+      if (cancelled) return;
+      if (!docsResult.ok) {
+        setError(docsResult.error);
         setLoading(false);
+        return;
       }
+      const documents = docsResult.data;
+      setEditorData({
+        workspaceId,
+        workspaceName,
+        annotationType: 'WSD',
+        documents,
+        session: null,
+        totalDocuments: documents.length,
+        totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
+        totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
+      });
+      if (documents.length > 0) {
+        await loadDocumentAt(0, documents);
+      }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
     };
+  }, [workspaceId, workspaceName, loadDocumentAt]);
 
-    if (workspaceId) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId]);
-
-  const loadDocumentAt = async (idx: number, docs?: WorkspaceEditorResponse['documents']) => {
-    const documents = docs ?? editorData?.documents ?? [];
-    const doc = documents[idx];
-    if (!doc || !doc.isTokenized || doc.tokenCount === 0) {
-      setDocumentContent(null);
-      return;
-    }
-    setCurrentDocIndex(idx);
-    setSelectedToken(null);
-    try {
-      const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, doc.id);
-      setDocumentContent(contentRes.data);
-      setAnnotationsByToken({});
-    } catch (err) {
-      console.error(err);
-      setError('Failed to load document content.');
-    }
-  };
-
-  // Token click → load senses for token.form + existing annotations.
-  const handleTokenClick = useCallback(async (token: TokenDto) => {
-    setSelectedToken(token);
-    setSenseFilter('');
-    setSensesLoading(true);
-    try {
-      const [sensesRes, annsRes] = await Promise.all([
-        wsdApi.listSenses(workspaceId, token.form),
-        wsdApi.getAnnotationsForToken(workspaceId, token.id),
+  const handleTokenClick = useCallback(
+    async (token: TokenDto) => {
+      setSelectedToken(token);
+      setSenseFilter('');
+      setSensesLoading(true);
+      const [sensesResult, annsResult] = await Promise.all([
+        listSensesAction(workspaceId, token.form),
+        getAnnotationsForTokenAction(workspaceId, token.id),
       ]);
-      setSenses(sensesRes.data);
-      setAnnotationsByToken(prev => ({ ...prev, [token.id]: annsRes.data }));
-    } catch (err) {
-      console.error(err);
-    } finally {
       setSensesLoading(false);
-    }
-  }, [workspaceId]);
+      if (sensesResult.ok) setSenses(sensesResult.data);
+      if (annsResult.ok) {
+        setAnnotationsByToken(prev => ({ ...prev, [token.id]: annsResult.data }));
+      }
+    },
+    [workspaceId],
+  );
 
   const handlePickSense = async (sense: WsdSense) => {
     if (!selectedToken) return;
-    try {
-      const res = await wsdApi.upsertAnnotation(workspaceId, selectedToken.id, sense.id);
-      setAnnotationsByToken(prev => {
-        const others = (prev[selectedToken.id] ?? []).filter(a => a.annotatorId !== res.data.annotatorId);
-        return { ...prev, [selectedToken.id]: [...others, res.data] };
-      });
-    } catch (err) {
-      console.error(err);
+    const result = await upsertAnnotationAction(workspaceId, selectedToken.id, sense.id);
+    if (!result.ok) {
+      console.error(result.error);
+      return;
     }
+    setAnnotationsByToken(prev => {
+      const others = (prev[selectedToken.id] ?? []).filter(
+        a => a.annotatorId !== result.data.annotatorId,
+      );
+      return { ...prev, [selectedToken.id]: [...others, result.data] };
+    });
   };
 
   const getMyAnnotation = (tokenId: string): WsdAnnotation | undefined => {
@@ -194,7 +199,7 @@ export default function WsdEditor({ workspaceId }: WsdEditorProps) {
                   key={doc.id}
                   variant={currentDocIndex === idx ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => loadDocumentAt(idx)}
+                  onClick={() => loadDocumentAt(idx, editorData.documents)}
                 >
                   {doc.name}
                 </Button>

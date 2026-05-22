@@ -1,11 +1,42 @@
 import 'server-only';
 
-import { ApiResponse, CreateWsdSenseRequest, WsdSense } from '@/lib/api';
+import {
+  ApiResponse,
+  CreateWsdSenseRequest,
+  WsdAnnotation,
+  WsdSense,
+} from '@/lib/api';
 import { serverFetch } from './api';
 
-export async function listSenses(workspaceId: string): Promise<WsdSense[]> {
+export async function listSenses(
+  workspaceId: string,
+  word?: string,
+): Promise<WsdSense[]> {
+  const qs = word ? `?word=${encodeURIComponent(word)}` : '';
   const res = await serverFetch<ApiResponse<WsdSense[]>>(
-    `/api/workspaces/${workspaceId}/wsd/senses`,
+    `/api/workspaces/${workspaceId}/wsd/senses${qs}`,
+  );
+  return res.data;
+}
+
+export async function getAnnotationsForToken(
+  workspaceId: string,
+  tokenId: string,
+): Promise<WsdAnnotation[]> {
+  const res = await serverFetch<ApiResponse<WsdAnnotation[]>>(
+    `/api/workspaces/${workspaceId}/wsd/tokens/${tokenId}/annotations`,
+  );
+  return res.data;
+}
+
+export async function upsertAnnotation(
+  workspaceId: string,
+  tokenId: string,
+  senseId: string,
+): Promise<WsdAnnotation> {
+  const res = await serverFetch<ApiResponse<WsdAnnotation>>(
+    `/api/workspaces/${workspaceId}/wsd/annotations`,
+    { method: 'POST', body: JSON.stringify({ tokenId, senseId }) },
   );
   return res.data;
 }

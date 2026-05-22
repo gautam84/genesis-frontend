@@ -27,3 +27,8 @@ export async function createWorkspace(
   });
   return res.data;
 }
+
+export async function getWorkspaceById(id: string): Promise<WorkspaceResponse> {
+  const res = await serverFetch<ApiResponse<WorkspaceResponse>>(`/api/workspaces/${id}`);
+  return res.data;
+}

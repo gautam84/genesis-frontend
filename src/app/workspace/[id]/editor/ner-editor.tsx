@@ -20,20 +20,29 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/lib/auth';
 import {
-  editorApi,
-  nerAnnotationApi,
-  nerTagApi,
-  documentApi,
-  workspaceApi,
-  WorkspaceEditorResponse,
-  DocumentContentResponse,
-  TokenDto,
+  type WorkspaceEditorResponse,
+  type DocumentContentResponse,
+  type TokenDto,
   UNIVERSAL_NER_TAGS,
-  NerTag,
-  NerTagDefinition,
-  NerTagScope,
-  NerAnnotation,
+  type NerTag,
+  type NerTagDefinition,
+  type NerTagScope,
+  type NerAnnotation,
 } from '@/lib/api';
+import {
+  getDocumentContentAction,
+  getEditorDocumentsAction,
+  getEditorSessionAction,
+  saveEditorSessionAction,
+} from '@/lib/actions/editor';
+import {
+  createNerAnnotationAction,
+  createNerTagAction,
+  deleteNerAnnotationAction,
+  listNerAnnotationsAction,
+  listNerTagsAction,
+} from '@/lib/actions/ner';
+import { updateDocumentStatusAction } from '@/lib/actions/document';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { FullScreenLoader } from '@/components/Spinner';
 import { toast } from 'sonner';
@@ -64,9 +73,10 @@ function mergeTagDefinitions(defs: NerTagDefinition[]): NerTag[] {
 
 interface NerEditorProps {
   workspaceId: string;
+  workspaceName: string;
 }
 
-export default function NerEditor({ workspaceId }: NerEditorProps) {
+export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps) {
   const router = useRouter();
   const { user } = useAuth();
 
@@ -102,12 +112,11 @@ export default function NerEditor({ workspaceId }: NerEditorProps) {
   const [addingTag, setAddingTag] = useState(false);
 
   const refreshTags = useCallback(async () => {
-    try {
-      const res = await nerTagApi.list(workspaceId);
-      setAvailableTags(mergeTagDefinitions(res.data || []));
-    } catch {
-      // Fall back to universal tags only — already initialised in state.
+    const result = await listNerTagsAction(workspaceId);
+    if (result.ok) {
+      setAvailableTags(mergeTagDefinitions(result.data || []));
     }
+    // On failure, fall back to universal tags — already initialised in state.
   }, [workspaceId]);
 
   useEffect(() => {
@@ -128,115 +137,94 @@ export default function NerEditor({ workspaceId }: NerEditorProps) {
     const loadWorkspace = async () => {
       setLoading(true);
       setError(null);
-      try {
-        const [docsRes, wsRes] = await Promise.all([
-          editorApi.getWorkspaceDocuments(workspaceId),
-          workspaceApi.getById(workspaceId),
-        ]);
-        const documents = docsRes.data;
 
-        let savedSession = null;
-        let initialDocIndex = 0;
-        try {
-          const sessionRes = await editorApi.getSession(workspaceId);
-          savedSession = sessionRes.data;
-          if (savedSession && savedSession.lastDocumentIndex < documents.length) {
-            initialDocIndex = savedSession.lastDocumentIndex;
-          }
-        } catch {
-          // No saved session
+      const docsResult = await getEditorDocumentsAction(workspaceId);
+      if (!docsResult.ok) {
+        setError(docsResult.error);
+        setLoading(false);
+        return;
+      }
+      const documents = docsResult.data;
+
+      let savedSession = null;
+      let initialDocIndex = 0;
+      const sessionResult = await getEditorSessionAction(workspaceId);
+      if (sessionResult.ok && sessionResult.data) {
+        savedSession = sessionResult.data;
+        if (savedSession.lastDocumentIndex < documents.length) {
+          initialDocIndex = savedSession.lastDocumentIndex;
         }
+      }
 
-        setEditorData({
-          workspaceId,
-          workspaceName: wsRes.data.name,
-          annotationType: 'NER',
-          documents,
-          session: savedSession,
-          totalDocuments: documents.length,
-          totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
-          totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
-        });
+      setEditorData({
+        workspaceId,
+        workspaceName,
+        annotationType: 'NER',
+        documents,
+        session: savedSession,
+        totalDocuments: documents.length,
+        totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
+        totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
+      });
 
-        if (documents.length > 0) {
-          const doc = documents[initialDocIndex];
-          setCurrentDocIndex(initialDocIndex);
+      if (documents.length > 0) {
+        const doc = documents[initialDocIndex];
+        setCurrentDocIndex(initialDocIndex);
 
-          if (doc.isTokenized && doc.tokenCount > 0) {
-            try {
-              const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, doc.id);
-              setDocumentContent(contentRes.data);
+        if (doc.isTokenized && doc.tokenCount > 0) {
+          const contentResult = await getDocumentContentAction(workspaceId, doc.id);
+          if (contentResult.ok) {
+            setDocumentContent(contentResult.data);
 
-              try {
-                const annRes = await nerAnnotationApi.list(doc.id);
-                setAnnotations(annRes.data || []);
-              } catch {
-                setAnnotations([]);
-              }
+            const annResult = await listNerAnnotationsAction(doc.id);
+            setAnnotations(annResult.ok ? annResult.data : []);
 
-              if (savedSession?.scrollPosition) {
-                setTimeout(() => {
-                  if (containerRef.current) {
-                    containerRef.current.scrollTop = savedSession.scrollPosition;
-                    lastScrollRef.current = savedSession.scrollPosition;
-                  }
-                }, 500);
-              }
-            } catch {
-              // Document content not available
+            if (savedSession?.scrollPosition) {
+              setTimeout(() => {
+                if (containerRef.current) {
+                  containerRef.current.scrollTop = savedSession.scrollPosition;
+                  lastScrollRef.current = savedSession.scrollPosition;
+                }
+              }, 500);
             }
           }
         }
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Failed to load editor';
-        if (message.includes('Cannot connect')) {
-          setError('Cannot connect to the backend server. Please ensure the Genesis backend is running.');
-        } else {
-          setError(message);
-        }
-      } finally {
-        setLoading(false);
       }
+
+      setLoading(false);
     };
 
     if (workspaceId) {
       loadWorkspace();
     }
-  }, [workspaceId, containerRef, lastScrollRef]);
+  }, [workspaceId, workspaceName, containerRef, lastScrollRef]);
 
   const loadDocumentContent = async (docIndex: number) => {
     if (!editorData || docIndex >= editorData.documents.length) return;
 
-    try {
-      const scrollPos = containerRef.current?.scrollTop || 0;
-      await editorApi.saveSession({
-        workspaceId,
-        lastDocumentIndex: docIndex,
-        scrollPosition: scrollPos,
-      });
-    } catch {
-      // Session save failed — not fatal
-    }
+    const scrollPos = containerRef.current?.scrollTop || 0;
+    // Session save is best-effort; ignore its result.
+    await saveEditorSessionAction({
+      workspaceId,
+      lastDocumentIndex: docIndex,
+      scrollPosition: scrollPos,
+    });
 
     setAnchorIndex(null);
     setPendingRange(null);
     setAnnotations([]);
 
-    try {
-      const docId = editorData.documents[docIndex].id;
-      const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, docId);
-      setDocumentContent(contentRes.data);
-      setCurrentDocIndex(docIndex);
-
-      try {
-        const annRes = await nerAnnotationApi.list(docId);
-        setAnnotations(annRes.data || []);
-      } catch {
-        setAnnotations([]);
-      }
-    } catch (err) {
-      console.error('Failed to load document:', err);
+    const docId = editorData.documents[docIndex].id;
+    const contentResult = await getDocumentContentAction(workspaceId, docId);
+    if (!contentResult.ok) {
+      console.error('Failed to load document:', contentResult.error);
+      return;
     }
+    setDocumentContent(contentResult.data);
+    setCurrentDocIndex(docIndex);
+
+    const annResult = await listNerAnnotationsAction(docId);
+    setAnnotations(annResult.ok ? annResult.data : []);
   };
 
   // Token click handler — drives span selection
@@ -262,32 +250,28 @@ export default function NerEditor({ workspaceId }: NerEditorProps) {
   // Commit pending range with chosen label
   const commitSpan = async (tag: NerTag) => {
     if (!pendingRange || !documentContent) return;
-    const docId = documentContent.documentId;
-    try {
-      const res = await nerAnnotationApi.create({
-        documentId: docId,
-        startTokenIndex: pendingRange.start,
-        endTokenIndex: pendingRange.end,
-        label: tag.tag,
-      });
-      if (res.data) {
-        setAnnotations(prev => [...prev, res.data]);
-      }
-      clearPending();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create span';
-      console.error('Failed to create NER span:', message);
-      toast.error(message);
+    const result = await createNerAnnotationAction({
+      documentId: documentContent.documentId,
+      startTokenIndex: pendingRange.start,
+      endTokenIndex: pendingRange.end,
+      label: tag.tag,
+    });
+    if (!result.ok) {
+      console.error('Failed to create NER span:', result.error);
+      toast.error(result.error);
+      return;
     }
+    setAnnotations(prev => [...prev, result.data]);
+    clearPending();
   };
 
   const deleteSpan = async (id: string) => {
-    try {
-      await nerAnnotationApi.delete(id);
-      setAnnotations(prev => prev.filter(a => a.id !== id));
-    } catch (err) {
-      console.error('Failed to delete span:', err);
+    const result = await deleteNerAnnotationAction(id);
+    if (!result.ok) {
+      console.error('Failed to delete span:', result.error);
+      return;
     }
+    setAnnotations(prev => prev.filter(a => a.id !== id));
   };
 
   // Build per-token layer map for nested span rendering. Longer spans are placed
@@ -360,21 +344,19 @@ export default function NerEditor({ workspaceId }: NerEditorProps) {
       return;
     }
     setAddingTag(true);
-    try {
-      await nerTagApi.create({
-        tag,
-        description: newTagDescription.trim() || null,
-        scope: newTagScope,
-        workspaceId: newTagScope === 'WORKSPACE' ? workspaceId : null,
-      });
-      setShowAddTagDialog(false);
-      await refreshTags();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create tag';
-      setAddTagError(message);
-    } finally {
-      setAddingTag(false);
+    const result = await createNerTagAction({
+      tag,
+      description: newTagDescription.trim() || null,
+      scope: newTagScope,
+      workspaceId: newTagScope === 'WORKSPACE' ? workspaceId : null,
+    });
+    setAddingTag(false);
+    if (!result.ok) {
+      setAddTagError(result.error);
+      return;
     }
+    setShowAddTagDialog(false);
+    await refreshTags();
   };
 
   const renderTokenizedText = () => {
@@ -545,14 +527,14 @@ export default function NerEditor({ workspaceId }: NerEditorProps) {
               onClick={async () => {
                 const doc = editorData.documents[currentDocIndex];
                 const newStatus = doc.status === 'COMPLETE' ? 'ANNOTATING' : 'COMPLETE';
-                try {
-                  await documentApi.updateStatus(doc.id, newStatus);
-                  const newDocs = [...editorData.documents];
-                  newDocs[currentDocIndex] = { ...doc, status: newStatus };
-                  setEditorData({ ...editorData, documents: newDocs });
-                } catch (err) {
-                  console.error('Failed to update status:', err);
+                const result = await updateDocumentStatusAction(doc.id, newStatus);
+                if (!result.ok) {
+                  console.error('Failed to update status:', result.error);
+                  return;
                 }
+                const newDocs = [...editorData.documents];
+                newDocs[currentDocIndex] = { ...doc, status: newStatus };
+                setEditorData({ ...editorData, documents: newDocs });
               }}
             >
               {editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? 'Completed' : 'Mark Complete'}

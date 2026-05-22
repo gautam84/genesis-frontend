@@ -39,7 +39,7 @@ export default async function EditorPage({
     case 'NER':
       return <NerEditor workspaceId={id} workspaceName={workspaceName} />;
     case 'POS':
-      return <PosEditor workspaceId={id} />;
+      return <PosEditor workspaceId={id} workspaceName={workspaceName} />;
     case 'WSD':
       return <WsdEditor workspaceId={id} workspaceName={workspaceName} />;
   }

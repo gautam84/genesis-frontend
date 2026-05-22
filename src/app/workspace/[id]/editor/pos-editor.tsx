@@ -21,20 +21,28 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/lib/auth';
 import {
-  editorApi,
-  posApi,
-  posTagApi,
-  documentApi,
-  workspaceApi,
-  WorkspaceEditorResponse,
-  DocumentContentResponse,
-  TokenDto,
+  type WorkspaceEditorResponse,
+  type DocumentContentResponse,
+  type TokenDto,
   UNIVERSAL_POS_TAGS,
-  PosTag,
-  PosTagDefinition,
-  PosTagScope,
-  PosAnnotation,
+  type PosTag,
+  type PosTagDefinition,
+  type PosTagScope,
+  type PosAnnotation,
 } from '@/lib/api';
+import {
+  getDocumentContentAction,
+  getEditorDocumentsAction,
+  getEditorSessionAction,
+  saveEditorSessionAction,
+} from '@/lib/actions/editor';
+import {
+  createPosTagAction,
+  listPosAnnotationsAction,
+  listPosTagsAction,
+  updateTokenPosAction,
+} from '@/lib/actions/pos';
+import { updateDocumentStatusAction } from '@/lib/actions/document';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { FullScreenLoader } from '@/components/Spinner';
 
@@ -64,9 +72,10 @@ function mergeTagDefinitions(defs: PosTagDefinition[]): PosTag[] {
 
 interface PosEditorProps {
   workspaceId: string;
+  workspaceName: string;
 }
 
-export default function PosEditor({ workspaceId }: PosEditorProps) {
+export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps) {
   const router = useRouter();
   const { user } = useAuth();
 
@@ -100,12 +109,11 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
   const [addingTag, setAddingTag] = useState(false);
 
   const refreshTags = useCallback(async () => {
-    try {
-      const res = await posTagApi.list(workspaceId);
-      setAvailableTags(mergeTagDefinitions(res.data || []));
-    } catch {
-      // Fall back to universal tags only — already initialised in state.
+    const result = await listPosTagsAction(workspaceId);
+    if (result.ok) {
+      setAvailableTags(mergeTagDefinitions(result.data || []));
     }
+    // On failure, fall back to universal tags — already initialised in state.
   }, [workspaceId]);
 
   useEffect(() => {
@@ -126,116 +134,99 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
     const loadWorkspace = async () => {
       setLoading(true);
       setError(null);
-      try {
-        const [docsRes, wsRes] = await Promise.all([
-          editorApi.getWorkspaceDocuments(workspaceId),
-          workspaceApi.getById(workspaceId),
-        ]);
-        const documents = docsRes.data;
 
-        let savedSession = null;
-        let initialDocIndex = 0;
-        try {
-          const sessionRes = await editorApi.getSession(workspaceId);
-          savedSession = sessionRes.data;
-          if (savedSession && savedSession.lastDocumentIndex < documents.length) {
-            initialDocIndex = savedSession.lastDocumentIndex;
-          }
-        } catch {
-          // No saved session
+      const docsResult = await getEditorDocumentsAction(workspaceId);
+      if (!docsResult.ok) {
+        setError(docsResult.error);
+        setLoading(false);
+        return;
+      }
+      const documents = docsResult.data;
+
+      let savedSession = null;
+      let initialDocIndex = 0;
+      const sessionResult = await getEditorSessionAction(workspaceId);
+      if (sessionResult.ok && sessionResult.data) {
+        savedSession = sessionResult.data;
+        if (savedSession.lastDocumentIndex < documents.length) {
+          initialDocIndex = savedSession.lastDocumentIndex;
         }
+      }
 
-        setEditorData({
-          workspaceId,
-          workspaceName: wsRes.data.name,
-          annotationType: 'POS',
-          documents,
-          session: savedSession,
-          totalDocuments: documents.length,
-          totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
-          totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
-        });
+      setEditorData({
+        workspaceId,
+        workspaceName,
+        annotationType: 'POS',
+        documents,
+        session: savedSession,
+        totalDocuments: documents.length,
+        totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
+        totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
+      });
 
-        if (documents.length > 0) {
-          const doc = documents[initialDocIndex];
-          setCurrentDocIndex(initialDocIndex);
+      if (documents.length > 0) {
+        const doc = documents[initialDocIndex];
+        setCurrentDocIndex(initialDocIndex);
 
-          if (doc.isTokenized && doc.tokenCount > 0) {
-            try {
-              const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, doc.id);
-              setDocumentContent(contentRes.data);
+        if (doc.isTokenized && doc.tokenCount > 0) {
+          const contentResult = await getDocumentContentAction(workspaceId, doc.id);
+          if (contentResult.ok) {
+            setDocumentContent(contentResult.data);
 
-              try {
-                const annRes = await posApi.getAnnotationsForDocument(doc.id);
-                setAnnotationsByToken(groupAnnotationsByToken(annRes.data || []));
-              } catch {
-                setAnnotationsByToken({});
-              }
+            const annResult = await listPosAnnotationsAction(doc.id);
+            setAnnotationsByToken(
+              annResult.ok ? groupAnnotationsByToken(annResult.data || []) : {},
+            );
 
-              if (savedSession?.scrollPosition) {
-                setTimeout(() => {
-                  if (containerRef.current) {
-                    containerRef.current.scrollTop = savedSession.scrollPosition;
-                    lastScrollRef.current = savedSession.scrollPosition;
-                  }
-                }, 500);
-              }
-            } catch {
-              // Document content not available
+            if (savedSession?.scrollPosition) {
+              setTimeout(() => {
+                if (containerRef.current) {
+                  containerRef.current.scrollTop = savedSession.scrollPosition;
+                  lastScrollRef.current = savedSession.scrollPosition;
+                }
+              }, 500);
             }
           }
         }
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Failed to load editor';
-        if (message.includes('Cannot connect')) {
-          setError('Cannot connect to the backend server. Please ensure the Genesis backend is running.');
-        } else {
-          setError(message);
-        }
-      } finally {
-        setLoading(false);
       }
+
+      setLoading(false);
     };
 
     if (workspaceId) {
       loadWorkspace();
     }
-  }, [workspaceId, containerRef, lastScrollRef]);
+  }, [workspaceId, workspaceName, containerRef, lastScrollRef]);
 
   // Load document content when switching documents
   const loadDocumentContent = async (docIndex: number) => {
     if (!editorData || docIndex >= editorData.documents.length) return;
 
-    try {
-      const scrollPos = containerRef.current?.scrollTop || 0;
-      await editorApi.saveSession({
-        workspaceId,
-        lastDocumentIndex: docIndex,
-        scrollPosition: scrollPos,
-      });
-    } catch {
-      // Failed to save session
-    }
+    const scrollPos = containerRef.current?.scrollTop || 0;
+    // Session save is best-effort; ignore its result.
+    await saveEditorSessionAction({
+      workspaceId,
+      lastDocumentIndex: docIndex,
+      scrollPosition: scrollPos,
+    });
 
     setSelectedTokenId(null);
     setLocalPosMap({});
     setAnnotationsByToken({});
 
-    try {
-      const docId = editorData.documents[docIndex].id;
-      const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, docId);
-      setDocumentContent(contentRes.data);
-      setCurrentDocIndex(docIndex);
-
-      try {
-        const annRes = await posApi.getAnnotationsForDocument(docId);
-        setAnnotationsByToken(groupAnnotationsByToken(annRes.data || []));
-      } catch {
-        setAnnotationsByToken({});
-      }
-    } catch (err) {
-      console.error('Failed to load document:', err);
+    const docId = editorData.documents[docIndex].id;
+    const contentResult = await getDocumentContentAction(workspaceId, docId);
+    if (!contentResult.ok) {
+      console.error('Failed to load document:', contentResult.error);
+      return;
     }
+    setDocumentContent(contentResult.data);
+    setCurrentDocIndex(docIndex);
+
+    const annResult = await listPosAnnotationsAction(docId);
+    setAnnotationsByToken(
+      annResult.ok ? groupAnnotationsByToken(annResult.data || []) : {},
+    );
   };
 
   // Helper: group flat annotations into Record<tokenId, PosAnnotation[]>
@@ -271,34 +262,34 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
     // Optimistic update
     setLocalPosMap(prev => ({ ...prev, [tokenId]: posTag }));
 
-    try {
-      const res = await posApi.updateTokenPos(tokenId, posTag);
-      // Refresh annotations cache: insert/replace current-user entry, or remove on null.
-      setAnnotationsByToken(prev => {
-        const next = { ...prev };
-        const existing = next[tokenId] ? [...next[tokenId]] : [];
-        const filtered = currentUser
-          ? existing.filter(a => a.annotatorId !== currentUser)
-          : existing;
-        if (posTag !== null && res.data) {
-          filtered.push(res.data);
-        }
-        if (filtered.length === 0) {
-          delete next[tokenId];
-        } else {
-          next[tokenId] = filtered;
-        }
-        return next;
-      });
-    } catch (err) {
-      console.error('Failed to update POS tag:', err);
+    const result = await updateTokenPosAction(tokenId, posTag);
+    if (!result.ok) {
+      console.error('Failed to update POS tag:', result.error);
       // Revert on error
       setLocalPosMap(prev => {
         const next = { ...prev };
         delete next[tokenId];
         return next;
       });
+      return;
     }
+    // Refresh annotations cache: insert/replace current-user entry, or remove on null.
+    setAnnotationsByToken(prev => {
+      const next = { ...prev };
+      const existing = next[tokenId] ? [...next[tokenId]] : [];
+      const filtered = currentUser
+        ? existing.filter(a => a.annotatorId !== currentUser)
+        : existing;
+      if (posTag !== null && result.data) {
+        filtered.push(result.data);
+      }
+      if (filtered.length === 0) {
+        delete next[tokenId];
+      } else {
+        next[tokenId] = filtered;
+      }
+      return next;
+    });
   }, [currentUser]);
 
   // Handle POS tag selection from palette
@@ -472,21 +463,19 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
       return;
     }
     setAddingTag(true);
-    try {
-      await posTagApi.create({
-        tag,
-        description: newTagDescription.trim() || null,
-        scope: newTagScope,
-        workspaceId: newTagScope === 'WORKSPACE' ? workspaceId : null,
-      });
-      setShowAddTagDialog(false);
-      await refreshTags();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create tag';
-      setAddTagError(message);
-    } finally {
-      setAddingTag(false);
+    const result = await createPosTagAction({
+      tag,
+      description: newTagDescription.trim() || null,
+      scope: newTagScope,
+      workspaceId: newTagScope === 'WORKSPACE' ? workspaceId : null,
+    });
+    setAddingTag(false);
+    if (!result.ok) {
+      setAddTagError(result.error);
+      return;
     }
+    setShowAddTagDialog(false);
+    await refreshTags();
   };
 
   // Compute statistics
@@ -669,14 +658,14 @@ export default function PosEditor({ workspaceId }: PosEditorProps) {
               onClick={async () => {
                 const doc = editorData.documents[currentDocIndex];
                 const newStatus = doc.status === 'COMPLETE' ? 'ANNOTATING' : 'COMPLETE';
-                try {
-                  await documentApi.updateStatus(doc.id, newStatus);
-                  const newDocs = [...editorData.documents];
-                  newDocs[currentDocIndex] = { ...doc, status: newStatus };
-                  setEditorData({ ...editorData, documents: newDocs });
-                } catch (err) {
-                  console.error('Failed to update status:', err);
+                const result = await updateDocumentStatusAction(doc.id, newStatus);
+                if (!result.ok) {
+                  console.error('Failed to update status:', result.error);
+                  return;
                 }
+                const newDocs = [...editorData.documents];
+                newDocs[currentDocIndex] = { ...doc, status: newStatus };
+                setEditorData({ ...editorData, documents: newDocs });
               }}
             >
               {editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? (

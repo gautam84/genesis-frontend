@@ -1,12 +1,19 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { CreateWsdSenseRequest, WsdSense } from '@/lib/api';
+import type {
+  CreateWsdSenseRequest,
+  WsdAnnotation,
+  WsdSense,
+} from '@/lib/api';
 import { SessionExpiredError } from '@/lib/errors';
 import {
   createSense,
   deleteSense,
+  getAnnotationsForToken,
+  listSenses,
   updateSense,
+  upsertAnnotation,
 } from '@/lib/server/wsd';
 
 type ActionResult<T> =
@@ -60,5 +67,42 @@ export async function deleteSenseAction(
     return { ok: true, data: undefined };
   } catch (err) {
     return toError(err, 'Failed to delete sense.');
+  }
+}
+
+export async function listSensesAction(
+  workspaceId: string,
+  word?: string,
+): Promise<ActionResult<WsdSense[]>> {
+  try {
+    const data = await listSenses(workspaceId, word);
+    return { ok: true, data };
+  } catch (err) {
+    return toError(err, 'Failed to load senses.');
+  }
+}
+
+export async function getAnnotationsForTokenAction(
+  workspaceId: string,
+  tokenId: string,
+): Promise<ActionResult<WsdAnnotation[]>> {
+  try {
+    const data = await getAnnotationsForToken(workspaceId, tokenId);
+    return { ok: true, data };
+  } catch (err) {
+    return toError(err, 'Failed to load token annotations.');
+  }
+}
+
+export async function upsertAnnotationAction(
+  workspaceId: string,
+  tokenId: string,
+  senseId: string,
+): Promise<ActionResult<WsdAnnotation>> {
+  try {
+    const data = await upsertAnnotation(workspaceId, tokenId, senseId);
+    return { ok: true, data };
+  } catch (err) {
+    return toError(err, 'Failed to tag token.');
   }
 }

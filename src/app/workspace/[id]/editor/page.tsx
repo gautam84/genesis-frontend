@@ -1,65 +1,46 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import { AuthGuard } from '@/components/auth-guard';
-import { workspaceApi, AnnotationType } from '@/lib/api';
+import { redirect } from 'next/navigation';
+import type { AnnotationType } from '@/lib/api';
+import { SessionExpiredError } from '@/lib/errors';
+import { getWorkspaceById } from '@/lib/server/workspace';
 import { isOneOf } from '@/lib/utils';
-import { FullScreenLoader } from '@/components/Spinner';
 import CorefEditor from './coref-editor';
+import NerEditor from './ner-editor';
 import PosEditor from './pos-editor';
 import WsdEditor from './wsd-editor';
-import NerEditor from './ner-editor';
 
 const ANNOTATION_TYPES: readonly AnnotationType[] = ['COREF', 'NER', 'POS', 'WSD'];
 
-export default function EditorPage() {
-  const { id: workspaceId } = useParams<{ id: string }>();
+export default async function EditorPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
 
-  const [annotationType, setAnnotationType] = useState<AnnotationType | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const loadAnnotationType = async () => {
-      try {
-        const res = await workspaceApi.getById(workspaceId);
-        if (isOneOf(res.data.annotationType, ANNOTATION_TYPES)) {
-          setAnnotationType(res.data.annotationType);
-        } else {
-          throw new Error(`Unknown annotation type from server: ${res.data.annotationType}`);
-        }
-      } catch (err) {
-        console.error('Failed to load workspace:', err);
-        setError('Failed to determine annotation type for this workspace.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (workspaceId) {
-      loadAnnotationType();
+  let annotationType: AnnotationType;
+  let workspaceName: string;
+  try {
+    const workspace = await getWorkspaceById(id);
+    if (!isOneOf(workspace.annotationType, ANNOTATION_TYPES)) {
+      throw new Error(`Unknown annotation type from server: ${workspace.annotationType}`);
     }
-  }, [workspaceId]);
-
-  if (loading) {
-    return <FullScreenLoader label="Loading Editor..." />;
+    annotationType = workspace.annotationType;
+    workspaceName = workspace.name;
+  } catch (err) {
+    if (err instanceof SessionExpiredError) {
+      redirect('/api/auth/end-session');
+    }
+    throw err;
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-red-500">{error}</p>
-      </div>
-    );
+  switch (annotationType) {
+    case 'COREF':
+      return <CorefEditor workspaceId={id} />;
+    case 'NER':
+      return <NerEditor workspaceId={id} />;
+    case 'POS':
+      return <PosEditor workspaceId={id} />;
+    case 'WSD':
+      return <WsdEditor workspaceId={id} workspaceName={workspaceName} />;
   }
-
-  return (
-    <AuthGuard>
-      {annotationType === 'POS' && <PosEditor workspaceId={workspaceId} />}
-      {annotationType === 'COREF' && <CorefEditor workspaceId={workspaceId} />}
-      {annotationType === 'WSD' && <WsdEditor workspaceId={workspaceId} />}
-      {annotationType === 'NER' && <NerEditor workspaceId={workspaceId} />}
-    </AuthGuard>
-  );
 }

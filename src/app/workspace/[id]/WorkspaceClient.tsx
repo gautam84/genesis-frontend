@@ -18,8 +18,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/auth';
 import {
-  documentApi,
-  importExportApi,
   type WorkspaceResponse,
   type DocumentResponse,
   type MemberResponse,
@@ -35,7 +33,10 @@ import {
   updateMemberRoleAction,
   updateWorkspaceAction,
 } from '@/lib/actions/workspace';
-import { deleteDocumentAction } from '@/lib/actions/document';
+import {
+  deleteDocumentAction,
+  uploadDocumentAction,
+} from '@/lib/actions/document';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
 import { Sidebar, SidebarItem } from './_components/Sidebar';
 import { DocumentGrid, DocumentFilter } from './_components/DocumentGrid';
@@ -178,24 +179,22 @@ export function WorkspaceClient({
     router.push('/home');
   };
 
-  // TODO(P1.5): migrate upload to a server action once serverFetch supports
-  // FormData (currently auto-sets Content-Type to application/json, which
-  // breaks multipart). Kept on documentApi.upload + tokenStorage for now.
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    try {
-      setIsUploading(true);
-      await documentApi.upload(workspace.id, file);
-      // Re-render the RSC so documents + workspace counts refresh.
-      router.refresh();
-    } catch (error) {
-      console.error('Failed to upload document:', error);
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    const result = await uploadDocumentAction(workspace.id, formData);
+    setIsUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (!result.ok) {
+      console.error('Failed to upload document:', result.error);
       toast.error('Failed to upload document.');
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
     }
+    // Re-render the RSC so documents + workspace counts refresh.
+    router.refresh();
   };
 
   const openExportDialog = (documentId?: string) => {
@@ -205,9 +204,6 @@ export function WorkspaceClient({
     setColumn2Mode(Column2Mode.PART_NUMBER);
   };
 
-  // TODO(P1.5): migrate export to a route handler that streams the blob.
-  // Server actions don't return binary data well; route handler is the
-  // right pattern. For now this path still uses fetchWithAuth + Bearer.
   const handleExportAction = async () => {
     try {
       setIsExporting(true);
@@ -218,11 +214,26 @@ export function WorkspaceClient({
         defaultPartNumber: 0,
       };
 
-      const result = exportTargetId
-        ? await importExportApi.exportDocument(exportTargetId, options)
-        : await importExportApi.exportWorkspace(workspace.id, options);
+      const target = exportTargetId
+        ? { type: 'documents', id: exportTargetId }
+        : { type: 'workspaces', id: workspace.id };
+      const res = await fetch(`/api/export/${target.type}/${target.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+      });
+      if (!res.ok) {
+        throw new Error(`Export failed (${res.status})`);
+      }
 
-      const { blob, filename } = result;
+      const contentDisposition = res.headers.get('Content-Disposition');
+      let filename = exportTargetId ? 'export.conll' : 'export.zip';
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (match?.[1]) filename = match[1];
+      }
+
+      const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

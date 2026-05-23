@@ -9,7 +9,9 @@ const REFRESH_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 // Routes that require an authenticated session. Anything not matching here
 // (e.g. /signup verification flows) passes through; AuthGuard / page-level
 // checks remain in place as a defence-in-depth layer.
-const PROTECTED_PREFIXES = ['/home', '/workspace'];
+// `/api/export` is included so proactive refresh runs before the route
+// handler proxies the blob download to Spring.
+const PROTECTED_PREFIXES = ['/home', '/workspace', '/api/export'];
 
 // Routes that should redirect to /home when the user already has a session.
 const GUEST_ONLY_PREFIXES = ['/login', '/signup'];

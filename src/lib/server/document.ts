@@ -24,3 +24,16 @@ export async function updateDocumentStatus(
   );
   return res.data;
 }
+
+export async function uploadDocument(
+  workspaceId: string,
+  file: File,
+): Promise<DocumentResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await serverFetch<ApiResponse<DocumentResponse>>(
+    `/api/workspaces/${workspaceId}/documents`,
+    { method: 'POST', body: formData },
+  );
+  return res.data;
+}

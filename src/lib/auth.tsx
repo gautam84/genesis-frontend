@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { tokenStorage, UserResponse } from './api';
+import { UserResponse } from './api';
 import { getSessionAction, loginAction, logoutAction } from './actions/auth';
 
 interface AuthContextType {
@@ -24,8 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const refreshUser = useCallback(async () => {
         // Cookie is the source of truth. The action reads the HttpOnly access
         // cookie server-side, refreshes if needed, and returns the user — or
-        // null when there's no valid session. localStorage is mirrored only
-        // because legacy data fetchers still send Bearer headers.
+        // null when there's no valid session.
         const result = await getSessionAction();
 
         if (!result.ok) {
@@ -36,14 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return;
         }
 
-        if (result.data) {
-            setUser(result.data);
-        } else {
-            // Server says no valid session. Drop the localStorage mirror so
-            // the legacy Bearer fetchers don't keep firing with a dead token.
-            tokenStorage.clearTokens();
-            setUser(null);
-        }
+        setUser(result.data ?? null);
         setIsLoading(false);
     }, []);
 
@@ -60,10 +52,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setIsLoading(false);
                 throw new Error(result.error);
             }
-            // HttpOnly cookies are the new source of truth (set by the action),
-            // but the existing client-side Bearer fetchers still read from
-            // localStorage. Mirror until the data layer migrates off Bearer.
-            tokenStorage.setTokens(result.data.accessToken, result.data.refreshToken);
+            // HttpOnly cookies are set by the action. No client-side token
+            // storage to mirror.
             await refreshUser();
         } catch (error) {
             setIsLoading(false);
@@ -73,7 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const logout = async () => {
         await logoutAction();
-        tokenStorage.clearTokens();
         setUser(null);
         router.push('/login');
     };

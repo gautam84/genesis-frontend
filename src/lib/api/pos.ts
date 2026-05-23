@@ -1,5 +1,3 @@
-import { ApiResponse, fetchWithAuth } from './client';
-
 export interface UpdateTokenPosRequest {
     pos: string | null;
 }
@@ -15,34 +13,6 @@ export interface PosAnnotation {
     posTag: string;
     timestamp: string;
 }
-
-export const posApi = {
-    updateTokenPos: async (tokenId: string, pos: string | null): Promise<ApiResponse<PosAnnotation | null>> => {
-        return fetchWithAuth<ApiResponse<PosAnnotation | null>>(`/api/tokens/${tokenId}/pos`, {
-            method: 'PUT',
-            body: JSON.stringify({ pos }),
-        });
-    },
-
-    batchUpdateTokenPos: async (updates: { tokenId: string; pos: string | null }[]): Promise<ApiResponse<PosAnnotation[]>> => {
-        return fetchWithAuth<ApiResponse<PosAnnotation[]>>('/api/tokens/pos/batch', {
-            method: 'PUT',
-            body: JSON.stringify({ updates }),
-        });
-    },
-
-    getAnnotationsForToken: async (tokenId: string): Promise<ApiResponse<PosAnnotation[]>> => {
-        return fetchWithAuth<ApiResponse<PosAnnotation[]>>(`/api/tokens/${tokenId}/pos`);
-    },
-
-    getAnnotationsForDocument: async (documentId: string): Promise<ApiResponse<PosAnnotation[]>> => {
-        return fetchWithAuth<ApiResponse<PosAnnotation[]>>(`/api/documents/${documentId}/pos`);
-    },
-
-    getMajorityPosForDocument: async (documentId: string): Promise<ApiResponse<Record<string, string>>> => {
-        return fetchWithAuth<ApiResponse<Record<string, string>>>(`/api/documents/${documentId}/pos/majority`);
-    },
-};
 
 // ==================== POS Tag Definitions (custom tags) ====================
 
@@ -63,26 +33,6 @@ export interface CreatePosTagRequest {
     scope: PosTagScope;
     workspaceId?: string | null;
 }
-
-export const posTagApi = {
-    list: async (workspaceId?: string): Promise<ApiResponse<PosTagDefinition[]>> => {
-        const qs = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : '';
-        return fetchWithAuth<ApiResponse<PosTagDefinition[]>>(`/api/pos-tags${qs}`);
-    },
-
-    create: async (request: CreatePosTagRequest): Promise<ApiResponse<PosTagDefinition>> => {
-        return fetchWithAuth<ApiResponse<PosTagDefinition>>('/api/pos-tags', {
-            method: 'POST',
-            body: JSON.stringify(request),
-        });
-    },
-
-    delete: async (definitionId: string): Promise<ApiResponse<void>> => {
-        return fetchWithAuth<ApiResponse<void>>(`/api/pos-tags/${definitionId}`, {
-            method: 'DELETE',
-        });
-    },
-};
 
 // ==================== POS Tagset (Universal Dependencies) ====================
 

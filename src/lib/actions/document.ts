@@ -3,7 +3,11 @@
 import { revalidatePath } from 'next/cache';
 import type { DocumentResponse } from '@/lib/api';
 import { SessionExpiredError } from '@/lib/errors';
-import { deleteDocument, updateDocumentStatus } from '@/lib/server/document';
+import {
+  deleteDocument,
+  updateDocumentStatus,
+  uploadDocument,
+} from '@/lib/server/document';
 
 type ActionResult<T> =
   | { ok: true; data: T }
@@ -38,5 +42,22 @@ export async function updateDocumentStatusAction(
     return { ok: true, data };
   } catch (err) {
     return toError(err, 'Failed to update document status');
+  }
+}
+
+export async function uploadDocumentAction(
+  workspaceId: string,
+  formData: FormData,
+): Promise<ActionResult<DocumentResponse>> {
+  const file = formData.get('file');
+  if (!(file instanceof File)) {
+    return { ok: false, error: 'No file provided' };
+  }
+  try {
+    const data = await uploadDocument(workspaceId, file);
+    revalidatePath(`/workspace/${workspaceId}`);
+    return { ok: true, data };
+  } catch (err) {
+    return toError(err, 'Failed to upload document');
   }
 }

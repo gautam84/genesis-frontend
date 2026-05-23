@@ -18,15 +18,29 @@ import {
 } from '@/components/ui/dialog';
 import { useAuth } from '@/lib/auth';
 import {
-  editorApi,
-  corefApi,
-  documentApi,
-  WorkspaceEditorResponse,
-  DocumentContentResponse,
-  TokenDto,
-  MentionDto,
-  ClusterDto,
+  type WorkspaceEditorResponse,
+  type DocumentContentResponse,
+  type TokenDto,
+  type MentionDto,
+  type ClusterDto,
 } from '@/lib/api';
+import {
+  getDocumentContentAction,
+  getEditorDocumentsAction,
+  getEditorSessionAction,
+  saveEditorSessionAction,
+} from '@/lib/actions/editor';
+import {
+  assignToClusterAction,
+  createClusterAction,
+  createMentionAction,
+  deleteClusterAction,
+  deleteMentionAction,
+  getClustersAction,
+  getMentionsByWorkspaceAction,
+  mergeClustersAction,
+} from '@/lib/actions/coref';
+import { updateDocumentStatusAction } from '@/lib/actions/document';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { FullScreenLoader } from '@/components/Spinner';
 
@@ -38,9 +52,10 @@ const CLUSTER_COLORS = [
 
 interface CorefEditorProps {
   workspaceId: string;
+  workspaceName: string;
 }
 
-export default function CorefEditor({ workspaceId }: CorefEditorProps) {
+export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorProps) {
   const router = useRouter();
   const { user } = useAuth();
 
@@ -86,125 +101,98 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
     const loadWorkspace = async () => {
       setLoading(true);
       setError(null);
-      try {
-        // Try to get documents list - this is more reliable than openWorkspace
-        const docsRes = await editorApi.getWorkspaceDocuments(workspaceId);
-        const documents = docsRes.data;
 
-        // Load saved session if available
-        let savedSession = null;
-        let initialDocIndex = 0;
-        try {
-          const sessionRes = await editorApi.getSession(workspaceId);
-          savedSession = sessionRes.data;
-          console.log('Loaded session:', savedSession);
-          if (savedSession && savedSession.lastDocumentIndex < documents.length) {
-            initialDocIndex = savedSession.lastDocumentIndex;
-            console.log('Restoring to document index:', initialDocIndex);
-          }
-        } catch (sessionErr) {
-          console.warn('No saved session:', sessionErr);
+      const docsResult = await getEditorDocumentsAction(workspaceId);
+      if (!docsResult.ok) {
+        setError(docsResult.error);
+        setLoading(false);
+        return;
+      }
+      const documents = docsResult.data;
+
+      let savedSession = null;
+      let initialDocIndex = 0;
+      const sessionResult = await getEditorSessionAction(workspaceId);
+      if (sessionResult.ok && sessionResult.data) {
+        savedSession = sessionResult.data;
+        if (savedSession.lastDocumentIndex < documents.length) {
+          initialDocIndex = savedSession.lastDocumentIndex;
         }
+      }
 
-        // Create minimal editor data from documents
-        setEditorData({
-          workspaceId: workspaceId,
-          workspaceName: 'Workspace',
-          annotationType: 'COREF',
-          documents: documents,
-          session: savedSession,
-          totalDocuments: documents.length,
-          totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
-          totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
-        });
+      setEditorData({
+        workspaceId,
+        workspaceName,
+        annotationType: 'COREF',
+        documents,
+        session: savedSession,
+        totalDocuments: documents.length,
+        totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
+        totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
+      });
 
-        // Load document at saved index if available, otherwise first document
-        if (documents.length > 0) {
-          const docIndex = initialDocIndex;
-          const doc = documents[docIndex];
-          setCurrentDocIndex(docIndex);
+      if (documents.length > 0) {
+        const docIndex = initialDocIndex;
+        const doc = documents[docIndex];
+        setCurrentDocIndex(docIndex);
 
-          // Only load content if document is tokenized
-          if (doc.isTokenized && doc.tokenCount > 0) {
-            try {
-              const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, doc.id, 0, PAGE_SIZE);
-              setDocumentContent(contentRes.data);
+        if (doc.isTokenized && doc.tokenCount > 0) {
+          const contentResult = await getDocumentContentAction(workspaceId, doc.id, 0, PAGE_SIZE);
+          if (contentResult.ok) {
+            setDocumentContent(contentResult.data);
 
-              // Restore scroll position after content loads (need delay for DOM to render)
-              if (savedSession?.scrollPosition) {
-                console.log('Will restore scroll to:', savedSession.scrollPosition);
-                setTimeout(() => {
-                  if (containerRef.current) {
-                    containerRef.current.scrollTop = savedSession.scrollPosition;
-                    lastScrollRef.current = savedSession.scrollPosition; // Sync ref
-                    console.log('Restored scroll position');
-                  }
-                }, 500); // Longer delay to ensure DOM is rendered
-              }
-            } catch (contentErr) {
-              console.warn('Document content not available:', contentErr);
+            if (savedSession?.scrollPosition) {
+              setTimeout(() => {
+                if (containerRef.current) {
+                  containerRef.current.scrollTop = savedSession.scrollPosition;
+                  lastScrollRef.current = savedSession.scrollPosition;
+                }
+              }, 500);
             }
           }
         }
-
-        // Load existing annotations
-        try {
-          const [mentionsRes, clustersRes] = await Promise.all([
-            corefApi.getMentionsByWorkspace(workspaceId),
-            corefApi.getClusters(workspaceId),
-          ]);
-          setMentions(mentionsRes.data);
-          setClusters(clustersRes.data);
-        } catch (annotErr) {
-          console.warn('Annotations not available:', annotErr);
-        }
-      } catch (err) {
-        console.error('Failed to load workspace:', err);
-        const message = err instanceof Error ? err.message : '';
-        if (message.includes('Cannot connect')) {
-          setError('Cannot connect to the backend server. Please ensure the Genesis backend is running on port 3003.');
-        } else {
-          setError(message || 'Failed to load editor. Make sure the backend is running and the workspace exists.');
-        }
-      } finally {
-        setLoading(false);
       }
+
+      const [mentionsResult, clustersResult] = await Promise.all([
+        getMentionsByWorkspaceAction(workspaceId),
+        getClustersAction(workspaceId),
+      ]);
+      if (mentionsResult.ok) setMentions(mentionsResult.data);
+      if (clustersResult.ok) setClusters(clustersResult.data);
+
+      setLoading(false);
     };
 
     if (workspaceId) {
       loadWorkspace();
     }
-  }, [workspaceId, containerRef, lastScrollRef]);
+  }, [workspaceId, workspaceName, containerRef, lastScrollRef]);
 
   // Load document content when switching documents
   const loadDocumentContent = async (docIndex: number) => {
     if (!editorData || docIndex >= editorData.documents.length) return;
 
-    // Save current session state before switching
-    try {
-      const scrollPos = containerRef.current?.scrollTop || 0;
-      await editorApi.saveSession({
-        workspaceId: workspaceId,
-        lastDocumentIndex: docIndex,
-        scrollPosition: scrollPos,
-      });
-    } catch (saveErr) {
-      console.warn('Failed to save session:', saveErr);
-    }
+    const scrollPos = containerRef.current?.scrollTop || 0;
+    // Session save is best-effort; ignore its result.
+    await saveEditorSessionAction({
+      workspaceId,
+      lastDocumentIndex: docIndex,
+      scrollPosition: scrollPos,
+    });
 
     // Reset linking state when switching documents
     setLinkingFromMention(null);
     setMousePosition(null);
     setSelectedMention(null);
 
-    try {
-      const docId = editorData.documents[docIndex].id;
-      const contentRes = await editorApi.getDocumentContentWithOffset(workspaceId, docId, 0, PAGE_SIZE);
-      setDocumentContent(contentRes.data);
-      setCurrentDocIndex(docIndex);
-    } catch (err) {
-      console.error('Failed to load document:', err);
+    const docId = editorData.documents[docIndex].id;
+    const contentResult = await getDocumentContentAction(workspaceId, docId, 0, PAGE_SIZE);
+    if (!contentResult.ok) {
+      console.error('Failed to load document:', contentResult.error);
+      return;
     }
+    setDocumentContent(contentResult.data);
+    setCurrentDocIndex(docIndex);
   };
 
 
@@ -293,30 +281,29 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
     );
     const text = tokens.map(t => t.form).join(' ');
 
-    try {
-      const res = await corefApi.createMention(workspaceId, {
-        documentId: documentContent.documentId,
-        sentenceIndex: sentenceIndex,
-        startTokenIndex: startIdx,
-        endTokenIndex: endIdx,
-        text: text,
-      });
+    const mentionResult = await createMentionAction(workspaceId, {
+      documentId: documentContent.documentId,
+      sentenceIndex: sentenceIndex,
+      startTokenIndex: startIdx,
+      endTokenIndex: endIdx,
+      text: text,
+    });
+    if (!mentionResult.ok) {
+      console.error('Failed to create mention:', mentionResult.error);
+      return;
+    }
+    const newMention = mentionResult.data;
+    setMentions(prev => [...prev, newMention]);
 
-      const newMention = res.data;
-      setMentions(prev => [...prev, newMention]);
-
-      // If we're in linking mode, link with the new mention and reset
-      if (linkingFromMention) {
-        await linkMentions(linkingFromMention, newMention);
-        setLinkingFromMention(null);
-        setSelectedMention(null);
-      } else {
-        // Set as selected - user can click a cluster to assign, or click another word to link
-        setLinkingFromMention(newMention);
-        setSelectedMention(newMention);
-      }
-    } catch (err) {
-      console.error('Failed to create mention:', err);
+    // If we're in linking mode, link with the new mention and reset
+    if (linkingFromMention) {
+      await linkMentions(linkingFromMention, newMention);
+      setLinkingFromMention(null);
+      setSelectedMention(null);
+    } else {
+      // Set as selected - user can click a cluster to assign, or click another word to link
+      setLinkingFromMention(newMention);
+      setSelectedMention(newMention);
     }
   };
 
@@ -338,46 +325,52 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
 
   // Link two mentions together
   const linkMentions = async (mention1: MentionDto, mention2: MentionDto) => {
-    try {
-      let clusterId = mention1.clusterId || mention2.clusterId;
+    let clusterId = mention1.clusterId || mention2.clusterId;
 
-      if (!clusterId) {
-        // Create new cluster
-        const clusterRes = await corefApi.createCluster(workspaceId, {
-          color: CLUSTER_COLORS[clusters.length % CLUSTER_COLORS.length],
-        });
-        clusterId = clusterRes.data.id;
-        setClusters(prev => [...prev, clusterRes.data]);
+    if (!clusterId) {
+      const clusterResult = await createClusterAction(workspaceId, {
+        color: CLUSTER_COLORS[clusters.length % CLUSTER_COLORS.length],
+      });
+      if (!clusterResult.ok) {
+        console.error('Failed to create cluster:', clusterResult.error);
+        return;
       }
-
-      // Assign both mentions to cluster
-      if (!mention1.clusterId) {
-        await corefApi.assignToCluster(mention1.id, clusterId);
-      }
-      if (!mention2.clusterId) {
-        await corefApi.assignToCluster(mention2.id, clusterId);
-      }
-
-      // Refresh mentions
-      const mentionsRes = await corefApi.getMentionsByWorkspace(workspaceId);
-      setMentions(mentionsRes.data);
-
-      // Refresh clusters
-      const clustersRes = await corefApi.getClusters(workspaceId);
-      setClusters(clustersRes.data);
-    } catch (err) {
-      console.error('Failed to link mentions:', err);
+      clusterId = clusterResult.data.id;
+      setClusters(prev => [...prev, clusterResult.data]);
     }
+
+    // Assign both mentions to cluster
+    if (!mention1.clusterId) {
+      const r = await assignToClusterAction(mention1.id, clusterId);
+      if (!r.ok) {
+        console.error('Failed to assign mention to cluster:', r.error);
+        return;
+      }
+    }
+    if (!mention2.clusterId) {
+      const r = await assignToClusterAction(mention2.id, clusterId);
+      if (!r.ok) {
+        console.error('Failed to assign mention to cluster:', r.error);
+        return;
+      }
+    }
+
+    const [mentionsResult, clustersResult] = await Promise.all([
+      getMentionsByWorkspaceAction(workspaceId),
+      getClustersAction(workspaceId),
+    ]);
+    if (mentionsResult.ok) setMentions(mentionsResult.data);
+    if (clustersResult.ok) setClusters(clustersResult.data);
   };
 
   // Delete mention
   const handleDeleteMention = async (mentionId: string) => {
-    try {
-      await corefApi.deleteMention(mentionId);
-      setMentions(prev => prev.filter(m => m.id !== mentionId));
-    } catch (err) {
-      console.error('Failed to delete mention:', err);
+    const result = await deleteMentionAction(mentionId);
+    if (!result.ok) {
+      console.error('Failed to delete mention:', result.error);
+      return;
     }
+    setMentions(prev => prev.filter(m => m.id !== mentionId));
   };
 
   // Delete cluster (unassigns all mentions in this cluster)
@@ -385,17 +378,17 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
   // (to pick up renumbered cluster_number values) AND mentions (mentions carry
   // cached clusterNumber too).
   const handleDeleteCluster = async (clusterId: string) => {
-    try {
-      await corefApi.deleteCluster(clusterId);
-      const [clustersRes, mentionsRes] = await Promise.all([
-        corefApi.getClusters(workspaceId),
-        corefApi.getMentionsByWorkspace(workspaceId),
-      ]);
-      setClusters(clustersRes.data);
-      setMentions(mentionsRes.data);
-    } catch (err) {
-      console.error('Failed to delete cluster:', err);
+    const deleteResult = await deleteClusterAction(clusterId);
+    if (!deleteResult.ok) {
+      console.error('Failed to delete cluster:', deleteResult.error);
+      return;
     }
+    const [clustersResult, mentionsResult] = await Promise.all([
+      getClustersAction(workspaceId),
+      getMentionsByWorkspaceAction(workspaceId),
+    ]);
+    if (clustersResult.ok) setClusters(clustersResult.data);
+    if (mentionsResult.ok) setMentions(mentionsResult.data);
   };
 
   // ==================== Cluster Merge Handlers ====================
@@ -448,51 +441,50 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
 
     setMerging(true);
     setMergeError(null);
-    try {
-      await corefApi.mergeClusters(
-        workspaceId,
-        plan.sources.map(s => s.id),
-        plan.target.id,
-      );
-
-      // Backend compacts cluster numbers after merge — refetch BOTH clusters
-      // and mentions so cluster_number values everywhere are consistent.
-      const [clustersRes, mentionsRes] = await Promise.all([
-        corefApi.getClusters(workspaceId),
-        corefApi.getMentionsByWorkspace(workspaceId),
-      ]);
-      setClusters(clustersRes.data);
-      setMentions(mentionsRes.data);
-
-      // Reset merge UI
-      setSelectedClusterIds(new Set());
-      setSelectMode(false);
-      setShowMergeConfirm(false);
-    } catch (err) {
-      console.error('Failed to merge clusters:', err);
-      setMergeError(err instanceof Error ? err.message : 'Failed to merge clusters');
-    } finally {
+    const mergeResult = await mergeClustersAction(
+      workspaceId,
+      plan.sources.map(s => s.id),
+      plan.target.id,
+    );
+    if (!mergeResult.ok) {
+      console.error('Failed to merge clusters:', mergeResult.error);
+      setMergeError(mergeResult.error);
       setMerging(false);
+      return;
     }
+
+    // Backend compacts cluster numbers after merge — refetch BOTH clusters
+    // and mentions so cluster_number values everywhere are consistent.
+    const [clustersResult, mentionsResult] = await Promise.all([
+      getClustersAction(workspaceId),
+      getMentionsByWorkspaceAction(workspaceId),
+    ]);
+    if (clustersResult.ok) setClusters(clustersResult.data);
+    if (mentionsResult.ok) setMentions(mentionsResult.data);
+
+    // Reset merge UI
+    setSelectedClusterIds(new Set());
+    setSelectMode(false);
+    setShowMergeConfirm(false);
+    setMerging(false);
   };
 
   // Assign selected mention to an existing cluster
   const handleAssignToCluster = async (clusterId: string) => {
     if (!selectedMention) return;
 
-    try {
-      await corefApi.assignToCluster(selectedMention.id, clusterId);
-      // Refresh mentions and clusters
-      const [mentionsRes, clustersRes] = await Promise.all([
-        corefApi.getMentionsByWorkspace(workspaceId),
-        corefApi.getClusters(workspaceId),
-      ]);
-      setMentions(mentionsRes.data);
-      setClusters(clustersRes.data);
-      setSelectedMention(null); // Clear selection after assignment
-    } catch (err) {
-      console.error('Failed to assign to cluster:', err);
+    const assignResult = await assignToClusterAction(selectedMention.id, clusterId);
+    if (!assignResult.ok) {
+      console.error('Failed to assign to cluster:', assignResult.error);
+      return;
     }
+    const [mentionsResult, clustersResult] = await Promise.all([
+      getMentionsByWorkspaceAction(workspaceId),
+      getClustersAction(workspaceId),
+    ]);
+    if (mentionsResult.ok) setMentions(mentionsResult.data);
+    if (clustersResult.ok) setClusters(clustersResult.data);
+    setSelectedMention(null);
   };
 
   // Cancel linking and selection
@@ -549,31 +541,31 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
 
     loadingMoreRef.current = true;
     setLoadingMore(true);
-    try {
-      const next = await editorApi.getDocumentContentWithOffset(
-        workspaceId,
-        documentContent.documentId,
-        cur + 1,
-        documentContent.pageSize ?? PAGE_SIZE,
-      );
+    const nextResult = await getDocumentContentAction(
+      workspaceId,
+      documentContent.documentId,
+      cur + 1,
+      documentContent.pageSize ?? PAGE_SIZE,
+    );
+    if (nextResult.ok) {
+      const nextData = nextResult.data;
       setDocumentContent(prev => {
-        if (!prev) return next.data;
-        if (prev.documentId !== next.data.documentId) return prev; // Doc switched mid-flight
+        if (!prev) return nextData;
+        if (prev.documentId !== nextData.documentId) return prev; // Doc switched mid-flight
         return {
           ...prev,
-          sentences: [...prev.sentences, ...next.data.sentences],
-          tokens: [...prev.tokens, ...next.data.tokens],
-          currentPage: next.data.currentPage,
-          totalPages: next.data.totalPages,
-          pageSize: next.data.pageSize,
+          sentences: [...prev.sentences, ...nextData.sentences],
+          tokens: [...prev.tokens, ...nextData.tokens],
+          currentPage: nextData.currentPage,
+          totalPages: nextData.totalPages,
+          pageSize: nextData.pageSize,
         };
       });
-    } catch (err) {
-      console.warn('Failed to load next page:', err);
-    } finally {
-      loadingMoreRef.current = false;
-      setLoadingMore(false);
+    } else {
+      console.warn('Failed to load next page:', nextResult.error);
     }
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
   }, [documentContent, workspaceId]);
 
   // IntersectionObserver: load next page when sentinel enters viewport.
@@ -825,18 +817,14 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
                 onClick={async () => {
                   const doc = editorData.documents[currentDocIndex];
                   const newStatus = doc.status === 'COMPLETE' ? 'ANNOTATING' : 'COMPLETE';
-                  try {
-                    // Call API to update status
-                    await documentApi.updateStatus(doc.id, newStatus);
-
-                    // Optimistically update local state
-                    const newDocs = [...editorData.documents];
-                    newDocs[currentDocIndex] = { ...doc, status: newStatus };
-                    setEditorData({ ...editorData, documents: newDocs });
-
-                  } catch (err) {
-                    console.error('Failed to update status:', err);
+                  const result = await updateDocumentStatusAction(doc.id, newStatus);
+                  if (!result.ok) {
+                    console.error('Failed to update status:', result.error);
+                    return;
                   }
+                  const newDocs = [...editorData.documents];
+                  newDocs[currentDocIndex] = { ...doc, status: newStatus };
+                  setEditorData({ ...editorData, documents: newDocs });
                 }}
               >
                 {editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? (

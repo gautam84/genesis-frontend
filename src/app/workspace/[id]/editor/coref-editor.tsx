@@ -66,7 +66,9 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
   const [mergeError, setMergeError] = useState<string | null>(null);
 
   const cardContentRef = useRef<HTMLDivElement>(null); // For arrow positioning
-  const sentinelRef = useRef<HTMLDivElement>(null); // Bottom sentinel for infinite scroll
+  // Sentinel as state so the IntersectionObserver effect re-runs when the
+  // sentinel mounts/unmounts. A plain useRef wouldn't trigger the effect.
+  const [sentinelEl, setSentinelEl] = useState<HTMLDivElement | null>(null);
   const loadingMoreRef = useRef(false); // Guards re-entry into loadNextPage
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -574,11 +576,12 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
     }
   }, [documentContent, workspaceId]);
 
-  // IntersectionObserver: load next page when sentinel enters viewport
+  // IntersectionObserver: load next page when sentinel enters viewport.
+  // Depends on sentinelEl (state, not ref) so the effect runs reactively
+  // when the sentinel actually mounts — a ref-only dep would capture null
+  // on first run because refs don't trigger effect re-runs.
   useEffect(() => {
-    const sentinel = sentinelRef.current;
-    const root = containerRef.current;
-    if (!sentinel || !documentContent) return;
+    if (!sentinelEl || !documentContent) return;
     const cur = documentContent.currentPage ?? 0;
     const total = documentContent.totalPages ?? 1;
     if (cur + 1 >= total) return;
@@ -589,11 +592,11 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
           loadNextPage();
         }
       },
-      { root: root || null, rootMargin: '200px', threshold: 0 },
+      { root: containerRef.current, rootMargin: '200px', threshold: 0 },
     );
-    observer.observe(sentinel);
+    observer.observe(sentinelEl);
     return () => observer.disconnect();
-  }, [documentContent, loadNextPage, containerRef]);
+  }, [sentinelEl, documentContent, loadNextPage, containerRef]);
 
   // Render tokens with annotations
   const renderTokenizedText = () => {
@@ -702,7 +705,7 @@ export default function CorefEditor({ workspaceId }: CorefEditorProps) {
       <>
         {sentenceNodes}
         {hasMore && (
-          <div ref={sentinelRef} className="h-12 flex items-center justify-center text-xs text-slate-400">
+          <div ref={setSentinelEl} className="h-12 flex items-center justify-center text-xs text-slate-400">
             {loadingMore ? 'Loading more...' : 'Scroll to load more'}
           </div>
         )}

@@ -76,7 +76,9 @@ export async function serverFetch<T>(endpoint: string, init?: RequestInit): Prom
 
   const headers = new Headers(init?.headers);
   headers.set('Authorization', `Bearer ${accessToken}`);
-  if (init?.body && !headers.has('Content-Type')) {
+  // Default JSON only for string bodies — FormData / Blob / ReadableStream
+  // need fetch to set Content-Type itself (multipart boundary, etc).
+  if (typeof init?.body === 'string' && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 

@@ -10,6 +10,7 @@ import type {
 } from '@/lib/api';
 import { SessionExpiredError } from '@/lib/errors';
 import {
+  ACCESS_COOKIE,
   REFRESH_COOKIE,
   clearSessionCookies,
   serverFetch,
@@ -99,6 +100,21 @@ export async function getSessionAction(): Promise<ActionResult<UserResponse | nu
       return { ok: true, data: null };
     }
     // Transient network failure — keep the session optimistically.
+    return { ok: false, error: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+/**
+ * Returns the current access token for use as a WebSocket `Authorization`
+ * Bearer header. The STOMP/SockJS client can't read HttpOnly cookies, so
+ * the token has to be handed over via JS — it lives in memory only on
+ * the consumer side (no localStorage), and is short-lived (minutes).
+ */
+export async function getAccessTokenAction(): Promise<ActionResult<string | null>> {
+  try {
+    const jar = await cookies();
+    return { ok: true, data: jar.get(ACCESS_COOKIE)?.value ?? null };
+  } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Network error' };
   }
 }

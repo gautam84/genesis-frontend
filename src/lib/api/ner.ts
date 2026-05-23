@@ -1,5 +1,3 @@
-import { ApiResponse, fetchWithAuth } from './client';
-
 // ==================== NER Tag Definitions (custom tags) ====================
 
 export type NerTagScope = 'GLOBAL' | 'WORKSPACE';
@@ -19,26 +17,6 @@ export interface CreateNerTagRequest {
     scope: NerTagScope;
     workspaceId?: string | null;
 }
-
-export const nerTagApi = {
-    list: async (workspaceId?: string): Promise<ApiResponse<NerTagDefinition[]>> => {
-        const qs = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : '';
-        return fetchWithAuth<ApiResponse<NerTagDefinition[]>>(`/api/ner-tags${qs}`);
-    },
-
-    create: async (request: CreateNerTagRequest): Promise<ApiResponse<NerTagDefinition>> => {
-        return fetchWithAuth<ApiResponse<NerTagDefinition>>('/api/ner-tags', {
-            method: 'POST',
-            body: JSON.stringify(request),
-        });
-    },
-
-    delete: async (definitionId: string): Promise<ApiResponse<void>> => {
-        return fetchWithAuth<ApiResponse<void>>(`/api/ner-tags/${definitionId}`, {
-            method: 'DELETE',
-        });
-    },
-};
 
 // ==================== NER Tagset (OntoNotes 18) ====================
 
@@ -100,30 +78,3 @@ export interface UpdateNerAnnotationRequest {
     label?: string;
 }
 
-export const nerAnnotationApi = {
-    list: async (documentId: string, annotatorId?: string): Promise<ApiResponse<NerAnnotation[]>> => {
-        const params = new URLSearchParams({ documentId });
-        if (annotatorId) params.set('annotatorId', annotatorId);
-        return fetchWithAuth<ApiResponse<NerAnnotation[]>>(`/api/ner-annotations?${params.toString()}`);
-    },
-
-    create: async (request: CreateNerAnnotationRequest): Promise<ApiResponse<NerAnnotation>> => {
-        return fetchWithAuth<ApiResponse<NerAnnotation>>('/api/ner-annotations', {
-            method: 'POST',
-            body: JSON.stringify(request),
-        });
-    },
-
-    update: async (annotationId: string, request: UpdateNerAnnotationRequest): Promise<ApiResponse<NerAnnotation>> => {
-        return fetchWithAuth<ApiResponse<NerAnnotation>>(`/api/ner-annotations/${annotationId}`, {
-            method: 'PATCH',
-            body: JSON.stringify(request),
-        });
-    },
-
-    delete: async (annotationId: string): Promise<ApiResponse<void>> => {
-        return fetchWithAuth<ApiResponse<void>>(`/api/ner-annotations/${annotationId}`, {
-            method: 'DELETE',
-        });
-    },
-};

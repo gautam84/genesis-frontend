@@ -1,11 +1,9 @@
 /**
- * API client for Genesis backend.
- * Re-export barrel — domains live in sibling files. Existing
- * `import { foo } from '@/lib/api'` keeps working unchanged because
- * Node module resolution finds this directory's index.
+ * Barrel for shared API types. After the cookie-auth migration the
+ * per-domain files only export TypeScript shapes (request/response
+ * interfaces, enums, label constants). Runtime data fetching lives in
+ * `@/lib/server/*` and `@/lib/actions/*`.
  */
-
-import { authApi } from './auth';
 
 export * from './client';
 export * from './auth';
@@ -20,5 +18,3 @@ export * from './ner';
 export * from './import-export';
 export * from './recommendations';
 export * from './notifications';
-
-export default authApi;

@@ -3,8 +3,17 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Client, IMessage } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
-import { API_BASE_URL, Notification, notificationApi, tokenStorage } from './api';
+import { Notification } from './api';
+import { getAccessTokenAction } from './actions/auth';
+import {
+  deleteNotificationAction,
+  listNotificationsAction,
+  markAllNotificationsAsReadAction,
+  markNotificationAsReadAction,
+} from './actions/notifications';
 import { useAuth } from './auth';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 interface NotificationContextType {
     notifications: Notification[];
@@ -28,14 +37,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     // Fetch initial notifications
     const refreshNotifications = useCallback(async () => {
         if (!isAuthenticated) return;
-        try {
-            const response = await notificationApi.getAll();
-            const data = response?.data || [];
-            setNotifications(data);
-            setUnreadCount(data.filter(n => !n.read).length);
-        } catch (error) {
-            console.error('Failed to fetch notifications', error);
+        const result = await listNotificationsAction();
+        if (!result.ok) {
+            console.error('Failed to fetch notifications', result.error);
+            return;
         }
+        const data = result.data || [];
+        setNotifications(data);
+        setUnreadCount(data.filter(n => !n.read).length);
     }, [isAuthenticated]);
 
     useEffect(() => {
@@ -52,52 +61,72 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             return;
         }
 
-        const accessToken = tokenStorage.getAccessToken();
-        const socketUrl = `${API_BASE_URL}/ws`;
+        let cancelled = false;
+        let client: Client | null = null;
 
-        // Create client with auto-reconnect and authentication headers
-        const client = new Client({
-            webSocketFactory: () => new SockJS(socketUrl),
-            connectHeaders: {
-                Authorization: `Bearer ${accessToken}`,
-            },
-            reconnectDelay: 5000,
-            heartbeatIncoming: 4000,
-            heartbeatOutgoing: 4000,
+        // STOMP/SockJS can't read HttpOnly cookies, so we ask the server for
+        // the access token via an action and pass it in connectHeaders.
+        // The token stays in this closure; it's not persisted.
+        (async () => {
+            const tokenResult = await getAccessTokenAction();
+            if (cancelled) return;
+            if (!tokenResult.ok || !tokenResult.data) {
+                console.warn('No access token for notification WebSocket', tokenResult.ok ? 'cookie missing' : tokenResult.error);
+                return;
+            }
+            const accessToken = tokenResult.data;
+            const socketUrl = `${API_BASE_URL}/ws`;
 
-            onConnect: () => {
-                console.log('Connected to Notification WebSocket');
+            client = new Client({
+                webSocketFactory: () => new SockJS(socketUrl),
+                connectHeaders: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                reconnectDelay: 5000,
+                heartbeatIncoming: 4000,
+                heartbeatOutgoing: 4000,
 
-                // Subscribe to user-specific channel
-                client.subscribe(`/user/queue/notifications`, (message: IMessage) => {
-                    try {
-                        const notification: Notification = JSON.parse(message.body);
-                        setNotifications(prev => [notification, ...prev]);
-                        setUnreadCount(prev => prev + 1);
-                        // Show toast or sound could be triggered here
-                    } catch (e) {
-                        console.error('Failed to parse notification', e);
-                    }
-                });
-            },
+                onConnect: () => {
+                    console.log('Connected to Notification WebSocket');
 
-            onStompError: (frame) => {
-                console.error('Broker reported error: ' + frame.headers['message']);
-                console.error('Additional details: ' + frame.body);
-            },
-        });
+                    client?.subscribe(`/user/queue/notifications`, (message: IMessage) => {
+                        try {
+                            const notification: Notification = JSON.parse(message.body);
+                            setNotifications(prev => [notification, ...prev]);
+                            setUnreadCount(prev => prev + 1);
+                        } catch (e) {
+                            console.error('Failed to parse notification', e);
+                        }
+                    });
+                },
 
-        client.activate();
-        setStompClient(client);
+                onStompError: (frame) => {
+                    console.error('Broker reported error: ' + frame.headers['message']);
+                    console.error('Additional details: ' + frame.body);
+                },
+            });
+
+            client.activate();
+            if (cancelled) {
+                client.deactivate();
+                return;
+            }
+            setStompClient(client);
+        })();
 
         return () => {
-            client.deactivate();
+            cancelled = true;
+            client?.deactivate();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAuthenticated, user]);
 
     const markAsRead = async (id: string) => {
-        await notificationApi.markAsRead(id);
+        const result = await markNotificationAsReadAction(id);
+        if (!result.ok) {
+            console.error('Failed to mark notification as read', result.error);
+            return;
+        }
         setNotifications(prev => {
             const updated = prev.map(n => n.id === id ? { ...n, read: true } : n);
             setUnreadCount(updated.filter(n => !n.read).length);
@@ -106,7 +135,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
 
     const markAllAsRead = async () => {
-        await notificationApi.markAllAsRead();
+        const result = await markAllNotificationsAsReadAction();
+        if (!result.ok) {
+            console.error('Failed to mark all as read', result.error);
+            return;
+        }
         setNotifications(prev => {
             const updated = prev.map(n => ({ ...n, read: true }));
             setUnreadCount(0);
@@ -115,7 +148,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
 
     const deleteNotification = async (id: string) => {
-        await notificationApi.delete(id);
+        const result = await deleteNotificationAction(id);
+        if (!result.ok) {
+            console.error('Failed to delete notification', result.error);
+            return;
+        }
         setNotifications(prev => {
             const updated = prev.filter(n => n.id !== id);
             setUnreadCount(updated.filter(n => !n.read).length);

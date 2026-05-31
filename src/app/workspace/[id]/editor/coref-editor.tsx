@@ -540,7 +540,8 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     ]);
     if (mentionsResult.ok) setMentions(mentionsResult.data);
     if (clustersResult.ok) setClusters(clustersResult.data);
-    setSelectedMention(null);
+    // Assigning via the cluster panel completes the action — exit linking mode.
+    cancelLinking();
   };
 
   // Cancel linking and selection

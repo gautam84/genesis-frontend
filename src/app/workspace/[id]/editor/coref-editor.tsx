@@ -90,6 +90,19 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
   const [clusterToDelete, setClusterToDelete] = useState<ClusterDto | null>(null);
   const [deletingCluster, setDeletingCluster] = useState(false);
 
+  // Mention currently under the cursor — target for the Delete shortcut.
+  const [hoveredMentionId, setHoveredMentionId] = useState<string | null>(null);
+
+  // Undo stack for keyboard undo (Cmd/Ctrl+Z). Only the cleanly-reversible
+  // actions are recorded: a created mention (undo = delete it) and a link that
+  // created a brand-new cluster (undo = delete that cluster, which unassigns
+  // its members). Linking into an existing cluster has no clean inverse — the
+  // backend exposes no "unassign" — so it is intentionally not undoable here.
+  type UndoEntry =
+    | { type: 'mention'; mentionId: string }
+    | { type: 'cluster'; clusterId: string };
+  const undoStackRef = useRef<UndoEntry[]>([]);
+
   const cardContentRef = useRef<HTMLDivElement>(null); // For arrow positioning
   // Sentinel as state so the IntersectionObserver effect re-runs when the
   // sentinel mounts/unmounts. A plain useRef wouldn't trigger the effect.
@@ -179,8 +192,8 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
   }, [workspaceId, workspaceName, containerRef, lastScrollRef]);
 
   // Load document content when switching documents
-  const loadDocumentContent = async (docIndex: number) => {
-    if (!editorData || docIndex >= editorData.documents.length) return;
+  const loadDocumentContent = useCallback(async (docIndex: number) => {
+    if (!editorData || docIndex < 0 || docIndex >= editorData.documents.length) return;
 
     const scrollPos = containerRef.current?.scrollTop || 0;
     // Session save is best-effort; ignore its result.
@@ -203,7 +216,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     }
     setDocumentContent(contentResult.data);
     setCurrentDocIndex(docIndex);
-  };
+  }, [editorData, workspaceId, containerRef]);
 
 
 
@@ -310,6 +323,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
       }
       const newMention = mentionResult.data;
       setMentions(prev => [...prev, newMention]);
+      undoStackRef.current.push({ type: 'mention', mentionId: newMention.id });
 
       // If we're in linking mode, link with the new mention and reset
       if (linkingFromMention) {
@@ -357,6 +371,9 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
       }
       clusterId = clusterResult.data.id;
       setClusters(prev => [...prev, clusterResult.data]);
+      // A link that creates a fresh cluster is cleanly undoable: deleting the
+      // cluster unassigns both mentions back to their pre-link state.
+      undoStackRef.current.push({ type: 'cluster', clusterId });
     }
 
     // Assign both mentions to cluster
@@ -545,17 +562,149 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     };
   };
 
+  // Undo the most recent reversible action (Cmd/Ctrl+Z)
+  const performUndo = useCallback(async () => {
+    const entry = undoStackRef.current.pop();
+    if (!entry) {
+      toast.info('Nothing to undo');
+      return;
+    }
+    if (entry.type === 'mention') {
+      const r = await deleteMentionAction(entry.mentionId);
+      if (!r.ok) {
+        toast.error(r.error || 'Undo failed');
+        return;
+      }
+      setMentions(prev => prev.filter(m => m.id !== entry.mentionId));
+      toast.success('Removed mention');
+    } else {
+      const r = await deleteClusterAction(entry.clusterId);
+      if (!r.ok) {
+        toast.error(r.error || 'Undo failed');
+        return;
+      }
+      const [clustersResult, mentionsResult] = await Promise.all([
+        getClustersAction(workspaceId),
+        getMentionsByWorkspaceAction(workspaceId),
+      ]);
+      if (clustersResult.ok) setClusters(clustersResult.data);
+      if (mentionsResult.ok) setMentions(mentionsResult.data);
+      toast.success('Undid link');
+    }
+  }, [workspaceId]);
+
+  // Delete the mention under the cursor (Delete / Backspace)
+  const deleteFocusedMention = useCallback(async () => {
+    const targetId = hoveredMentionId ?? selectedMention?.id;
+    if (!targetId) return;
+    const result = await deleteMentionAction(targetId);
+    if (!result.ok) {
+      toast.error(result.error || 'Failed to delete mention');
+      return;
+    }
+    setMentions(prev => prev.filter(m => m.id !== targetId));
+    if (selectedMention?.id === targetId) setSelectedMention(null);
+    if (linkingFromMention?.id === targetId) setLinkingFromMention(null);
+    setHoveredMentionId(null);
+  }, [hoveredMentionId, selectedMention, linkingFromMention]);
+
+  // Toggle the current document's complete status, auto-advancing to the next
+  // document when marking complete (Cmd/Ctrl+Enter, or the header button).
+  const toggleComplete = useCallback(async () => {
+    if (!editorData) return;
+    const doc = editorData.documents[currentDocIndex];
+    if (!doc) return;
+    const newStatus = doc.status === 'COMPLETE' ? 'ANNOTATING' : 'COMPLETE';
+    const result = await updateDocumentStatusAction(doc.id, newStatus);
+    if (!result.ok) {
+      toast.error(result.error || 'Failed to update document status');
+      return;
+    }
+    const newDocs = [...editorData.documents];
+    newDocs[currentDocIndex] = { ...doc, status: newStatus };
+    setEditorData({ ...editorData, documents: newDocs });
+
+    if (newStatus === 'COMPLETE') {
+      if (currentDocIndex < editorData.documents.length - 1) {
+        loadDocumentContent(currentDocIndex + 1);
+      } else {
+        toast.success('All documents complete 🎉');
+      }
+    }
+  }, [editorData, currentDocIndex, loadDocumentContent]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Let modal dialogs own the keyboard while they're open
+      if (clusterToDelete || showMergeConfirm) return;
+
+      // Ignore shortcuts while typing in a field
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable ||
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      ) {
+        return;
+      }
+
       if (e.key === 'Escape') {
         cancelLinking();
+        return;
+      }
+
+      // Undo — Cmd/Ctrl+Z (ignore redo: Shift+Cmd/Ctrl+Z)
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+        e.preventDefault();
+        performUndo();
+        return;
+      }
+
+      // Mark complete & advance — Cmd/Ctrl+Enter
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        toggleComplete();
+        return;
+      }
+
+      // The remaining shortcuts are bare keys — skip if a modifier is held
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (hoveredMentionId || selectedMention) {
+          e.preventDefault();
+          deleteFocusedMention();
+        }
+        return;
+      }
+
+      if (e.key === '[') {
+        e.preventDefault();
+        loadDocumentContent(currentDocIndex - 1);
+        return;
+      }
+      if (e.key === ']') {
+        e.preventDefault();
+        loadDocumentContent(currentDocIndex + 1);
+        return;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cancelLinking]);
+  }, [
+    cancelLinking,
+    performUndo,
+    toggleComplete,
+    deleteFocusedMention,
+    loadDocumentContent,
+    currentDocIndex,
+    hoveredMentionId,
+    selectedMention,
+    clusterToDelete,
+    showMergeConfirm,
+  ]);
 
   // Append next page of sentences/tokens to current document content
   const loadNextPage = useCallback(async () => {
@@ -660,6 +809,8 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
               );
               const mentionText = mentionTokens.map(t => t.form).join(' ');
 
+              const isHovered = hoveredMentionId === mention.id;
+
               return (
                 <span
                   key={`mention-${sentIdx}-${mention.id}`}
@@ -668,7 +819,9 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                     ? 'ring-2 ring-blue-500 ring-offset-1 shadow-lg'
                     : isLinkTarget
                       ? 'ring-2 ring-green-400 ring-offset-1 hover:ring-green-500'
-                      : 'hover:shadow-md'
+                      : isHovered
+                        ? 'ring-2 ring-red-300 ring-offset-1 shadow-md'
+                        : 'hover:shadow-md'
                     }`}
                   style={{
                     backgroundColor: cluster ? `${cluster.color}30` : '#3b82f620',
@@ -676,7 +829,9 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                   }}
 
                   onClick={(e) => handleMentionClick(mention, e)}
-                  title={isLinking ? 'Select another mention to link' : 'Click to start linking'}
+                  onMouseEnter={() => setHoveredMentionId(mention.id)}
+                  onMouseLeave={() => setHoveredMentionId(prev => (prev === mention.id ? null : prev))}
+                  title={isLinking ? 'Select another mention to link' : 'Click to link · Del to delete'}
                 >
                   {mentionText}
                   {cluster && (
@@ -787,7 +942,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+      <div className="h-screen overflow-hidden flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
         {/* Header */}
         <header className="border-b border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
           <div className="max-w-full mx-auto px-6 py-4 flex items-center justify-between">
@@ -840,18 +995,8 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                 variant={editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? 'default' : 'outline'}
                 size="sm"
                 className={editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}
-                onClick={async () => {
-                  const doc = editorData.documents[currentDocIndex];
-                  const newStatus = doc.status === 'COMPLETE' ? 'ANNOTATING' : 'COMPLETE';
-                  const result = await updateDocumentStatusAction(doc.id, newStatus);
-                  if (!result.ok) {
-                    toast.error(result.error || 'Failed to update document status');
-                    return;
-                  }
-                  const newDocs = [...editorData.documents];
-                  newDocs[currentDocIndex] = { ...doc, status: newStatus };
-                  setEditorData({ ...editorData, documents: newDocs });
-                }}
+                title="Mark complete & advance (⌘/Ctrl+Enter)"
+                onClick={toggleComplete}
               >
                 {editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? (
                   <>
@@ -878,7 +1023,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
           </div>
         </header>
 
-        <div className="flex h-[calc(100vh-73px)]">
+        <div className="flex flex-1 min-h-0">
           {/* Left Pane - Mentions & Clusters */}
           <aside className="w-80 border-r border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10">
@@ -1211,7 +1356,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
           </main>
 
           {/* Right Pane - Instructions */}
-          <aside className="w-72 border-l border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm p-4">
+          <aside className="w-72 border-l border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
             <h3 className="font-bold text-slate-900 dark:text-white mb-4">How to Annotate</h3>
             <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
               <div className="flex gap-3">
@@ -1238,6 +1383,33 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                 </div>
                 <p>Press <strong>ESC</strong> to cancel linking mode</p>
               </div>
+            </div>
+
+            <Separator className="my-6" />
+
+            <h3 className="font-bold text-slate-900 dark:text-white mb-4">Keyboard Shortcuts</h3>
+            <div className="space-y-2 text-sm">
+              {[
+                { keys: ['Del'], label: 'Delete mention under cursor' },
+                { keys: ['⌘/Ctrl', 'Z'], label: 'Undo last mention / link' },
+                { keys: ['[', ']'], label: 'Previous / next document' },
+                { keys: ['⌘/Ctrl', '↵'], label: 'Mark complete & advance' },
+                { keys: ['Esc'], label: 'Cancel linking' },
+              ].map((s) => (
+                <div key={s.label} className="flex items-center justify-between gap-3">
+                  <span className="text-slate-600 dark:text-slate-400">{s.label}</span>
+                  <span className="flex items-center gap-1 flex-shrink-0">
+                    {s.keys.map((k) => (
+                      <kbd
+                        key={k}
+                        className="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-mono text-slate-700 dark:text-slate-300"
+                      >
+                        {k}
+                      </kbd>
+                    ))}
+                  </span>
+                </div>
+              ))}
             </div>
 
             <Separator className="my-6" />

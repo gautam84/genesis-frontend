@@ -706,6 +706,27 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     showMergeConfirm,
   ]);
 
+  // Keep the active document button visible in the scrollable strip
+  useEffect(() => {
+    document
+      .querySelector('[data-doc-active="true"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [currentDocIndex]);
+
+  // Cross-highlight: clicking a mention in the left pane reveals it in the text.
+  // If the mention lives in another document, switch to that document first.
+  const revealMentionInText = (mention: MentionDto) => {
+    if (documentContent && mention.documentId !== documentContent.documentId) {
+      const idx = editorData?.documents.findIndex(d => d.id === mention.documentId) ?? -1;
+      if (idx >= 0) loadDocumentContent(idx);
+      return;
+    }
+    setHoveredMentionId(mention.id);
+    document
+      .querySelector(`[data-mention-id="${mention.id}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   // Append next page of sentences/tokens to current document content
   const loadNextPage = useCallback(async () => {
     if (loadingMoreRef.current) return;
@@ -820,7 +841,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                     : isLinkTarget
                       ? 'ring-2 ring-green-400 ring-offset-1 hover:ring-green-500'
                       : isHovered
-                        ? 'ring-2 ring-red-300 ring-offset-1 shadow-md'
+                        ? 'ring-2 ring-amber-400 ring-offset-1 shadow-md'
                         : 'hover:shadow-md'
                     }`}
                   style={{
@@ -1176,7 +1197,16 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                       {clusterMentions.map((mention) => (
                         <div
                           key={mention.id}
-                          className="text-sm text-slate-600 dark:text-slate-400 flex items-center justify-between group"
+                          className={`text-sm text-slate-600 dark:text-slate-400 flex items-center justify-between group rounded px-1 -mx-1 cursor-pointer ${
+                            hoveredMentionId === mention.id ? 'bg-amber-100 dark:bg-amber-900/30' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            revealMentionInText(mention);
+                          }}
+                          onMouseEnter={() => setHoveredMentionId(mention.id)}
+                          onMouseLeave={() => setHoveredMentionId(prev => (prev === mention.id ? null : prev))}
+                          title="Click to find in text"
                         >
                           <span className="truncate">&quot;{mention.text}&quot;</span>
                           {!selectMode && (
@@ -1215,14 +1245,23 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                     {mentions.filter(m => !m.clusterId).map((mention) => (
                       <div
                         key={mention.id}
-                        className="text-sm text-slate-600 dark:text-slate-400 flex items-center justify-between group"
+                        className={`text-sm text-slate-600 dark:text-slate-400 flex items-center justify-between group rounded px-1 -mx-1 cursor-pointer ${
+                          hoveredMentionId === mention.id ? 'bg-amber-100 dark:bg-amber-900/30' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                        }`}
+                        onClick={() => revealMentionInText(mention)}
+                        onMouseEnter={() => setHoveredMentionId(mention.id)}
+                        onMouseLeave={() => setHoveredMentionId(prev => (prev === mention.id ? null : prev))}
+                        title="Click to find in text"
                       >
                         <span className="truncate">&quot;{mention.text}&quot;</span>
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
-                          onClick={() => handleDeleteMention(mention.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteMention(mention.id);
+                          }}
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1257,19 +1296,73 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
             onScroll={handleScroll}
           >
             <div className="p-8">
-              {/* Document Tabs */}
-              {editorData.documents.length > 1 && (
-                <div className="flex gap-2 mb-4 flex-wrap">
-                  {editorData.documents.map((doc, idx) => (
+              {/* Document switcher: scrollable strip + prev/next + progress */}
+              {editorData.documents.length > 0 && (
+                <div className="flex items-center gap-2 mb-4">
+                  {editorData.documents.length > 1 && (
                     <Button
-                      key={doc.id}
-                      variant={currentDocIndex === idx ? 'default' : 'outline'}
+                      variant="outline"
                       size="sm"
-                      onClick={() => loadDocumentContent(idx)}
+                      className="px-2 flex-shrink-0"
+                      disabled={currentDocIndex <= 0}
+                      onClick={() => loadDocumentContent(currentDocIndex - 1)}
+                      title="Previous document ( [ )"
                     >
-                      {doc.name}
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
                     </Button>
-                  ))}
+                  )}
+
+                  <div className="flex gap-2 overflow-x-auto py-1 flex-1">
+                    {editorData.documents.map((doc, idx) => {
+                      const isComplete = doc.status === 'COMPLETE';
+                      const isActive = currentDocIndex === idx;
+                      return (
+                        <Button
+                          key={doc.id}
+                          data-doc-active={isActive}
+                          variant={isActive ? 'default' : 'outline'}
+                          size="sm"
+                          className="flex-shrink-0 gap-1.5"
+                          onClick={() => loadDocumentContent(idx)}
+                          title={isComplete ? `${doc.name} — complete` : doc.name}
+                        >
+                          <span
+                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              isComplete
+                                ? 'bg-green-500'
+                                : isActive
+                                  ? 'bg-white/70'
+                                  : 'bg-slate-300 dark:bg-slate-600'
+                            }`}
+                          />
+                          {doc.name}
+                        </Button>
+                      );
+                    })}
+                  </div>
+
+                  {editorData.documents.length > 1 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="px-2 flex-shrink-0"
+                      disabled={currentDocIndex >= editorData.documents.length - 1}
+                      onClick={() => loadDocumentContent(currentDocIndex + 1)}
+                      title="Next document ( ] )"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Button>
+                  )}
+
+                  <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0 whitespace-nowrap ml-1">
+                    Doc {currentDocIndex + 1}/{editorData.documents.length}
+                    {' · '}
+                    {editorData.documents.filter(d => d.status === 'COMPLETE').length} complete
+                  </span>
                 </div>
               )}
 

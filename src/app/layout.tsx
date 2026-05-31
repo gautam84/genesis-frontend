@@ -24,9 +24,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning on <html>/<body>: browser extensions (Grammarly,
+    // QuillBot, etc.) inject attributes onto these elements after SSR but before
+    // React hydrates, producing a benign server/client attribute mismatch. The
+    // prop suppresses the warning for these two elements only — not descendants.
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
       >
         <Providers>{children}</Providers>
       </body>

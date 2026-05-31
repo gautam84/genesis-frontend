@@ -849,7 +849,18 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                     borderBottom: `3px solid ${cluster?.color || '#3b82f6'}`,
                   }}
 
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Mention "${mentionText}"${cluster ? `, cluster ${cluster.clusterNumber}` : ', unassigned'}. Activate to link, Delete to remove.`}
                   onClick={(e) => handleMentionClick(mention, e)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleMentionClick(mention, e as unknown as React.MouseEvent);
+                    }
+                  }}
+                  onFocus={() => setHoveredMentionId(mention.id)}
+                  onBlur={() => setHoveredMentionId(prev => (prev === mention.id ? null : prev))}
                   onMouseEnter={() => setHoveredMentionId(mention.id)}
                   onMouseLeave={() => setHoveredMentionId(prev => (prev === mention.id ? null : prev))}
                   title={isLinking ? 'Select another mention to link' : 'Click to link · Del to delete'}
@@ -984,21 +995,24 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-3 flex-wrap justify-end">
               {linkingFromMention && (
                 <Badge variant="default" className="bg-blue-600 text-white animate-pulse">
                   Linking mode - Click another mention or press ESC
                 </Badge>
               )}
-              <Badge variant="secondary" className="text-sm">
-                {editorData.totalTokens} tokens
-              </Badge>
-              <Badge variant="secondary" className="text-sm">
-                {mentions.length} mentions
-              </Badge>
-              <Badge variant="secondary" className="text-sm">
-                {clusters.length} clusters
-              </Badge>
+              {/* Stat badges duplicate the left-pane summary; show only on wide screens */}
+              <div className="hidden xl:flex items-center gap-2">
+                <Badge variant="secondary" className="text-sm">
+                  {editorData.totalTokens} tokens
+                </Badge>
+                <Badge variant="secondary" className="text-sm">
+                  {mentions.length} mentions
+                </Badge>
+                <Badge variant="secondary" className="text-sm">
+                  {clusters.length} clusters
+                </Badge>
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -1166,10 +1180,14 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                           )}
                         </div>
                       )}
-                      <div
-                        className="w-4 h-4 rounded-full"
+                      {/* Numbered color chip — a colorblind-safe cue pairing the
+                          cluster color with its number (matches the in-text sup). */}
+                      <span
+                        className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded text-[11px] font-bold text-white flex-shrink-0"
                         style={{ backgroundColor: cluster.color }}
-                      />
+                      >
+                        {cluster.clusterNumber}
+                      </span>
                       <span className="font-semibold text-slate-900 dark:text-white">
                         Cluster {cluster.clusterNumber}
                       </span>
@@ -1503,28 +1521,6 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                   </span>
                 </div>
               ))}
-            </div>
-
-            <Separator className="my-6" />
-
-            <h3 className="font-bold text-slate-900 dark:text-white mb-4">Statistics</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-600 dark:text-slate-400">Documents</span>
-                <span className="font-bold">{editorData.totalDocuments}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600 dark:text-slate-400">Total Tokens</span>
-                <span className="font-bold">{editorData.totalTokens}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600 dark:text-slate-400">Mentions</span>
-                <span className="font-bold">{mentions.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600 dark:text-slate-400">Clusters</span>
-                <span className="font-bold">{clusters.length}</span>
-              </div>
             </div>
           </aside>
         </div>

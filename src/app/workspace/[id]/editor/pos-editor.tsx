@@ -44,6 +44,8 @@ import {
 } from '@/lib/actions/pos';
 import { updateDocumentStatusAction } from '@/lib/actions/document';
 import { useEditorSession } from '@/hooks/useEditorSession';
+import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/hooks/usePaginatedDocument';
+import { EditorLoadMore } from '@/components/editor/EditorLoadMore';
 import { FullScreenLoader } from '@/components/Spinner';
 
 const CUSTOM_TAG_PALETTE = [
@@ -169,7 +171,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
         setCurrentDocIndex(initialDocIndex);
 
         if (doc.isTokenized && doc.tokenCount > 0) {
-          const contentResult = await getDocumentContentAction(workspaceId, doc.id);
+          const contentResult = await getDocumentContentAction(workspaceId, doc.id, 0, EDITOR_PAGE_SIZE);
           if (contentResult.ok) {
             setDocumentContent(contentResult.data);
 
@@ -215,7 +217,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
     setAnnotationsByToken({});
 
     const docId = editorData.documents[docIndex].id;
-    const contentResult = await getDocumentContentAction(workspaceId, docId);
+    const contentResult = await getDocumentContentAction(workspaceId, docId, 0, EDITOR_PAGE_SIZE);
     if (!contentResult.ok) {
       console.error('Failed to load document:', contentResult.error);
       return;
@@ -228,6 +230,13 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
       annResult.ok ? groupAnnotationsByToken(annResult.data || []) : {},
     );
   };
+
+  const pagination = usePaginatedDocument({
+    workspaceId,
+    documentContent,
+    setDocumentContent,
+    scrollRootRef: containerRef,
+  });
 
   // Helper: group flat annotations into Record<tokenId, PosAnnotation[]>
   function groupAnnotationsByToken(annotations: PosAnnotation[]): Record<string, PosAnnotation[]> {
@@ -802,6 +811,8 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
                 </div>
               </CardContent>
             </Card>
+
+            <EditorLoadMore {...pagination} />
           </div>
         </main>
 

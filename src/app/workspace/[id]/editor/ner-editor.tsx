@@ -44,6 +44,8 @@ import {
 } from '@/lib/actions/ner';
 import { updateDocumentStatusAction } from '@/lib/actions/document';
 import { useEditorSession } from '@/hooks/useEditorSession';
+import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/hooks/usePaginatedDocument';
+import { EditorLoadMore } from '@/components/editor/EditorLoadMore';
 import { FullScreenLoader } from '@/components/Spinner';
 import { toast } from 'sonner';
 
@@ -172,7 +174,7 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
         setCurrentDocIndex(initialDocIndex);
 
         if (doc.isTokenized && doc.tokenCount > 0) {
-          const contentResult = await getDocumentContentAction(workspaceId, doc.id);
+          const contentResult = await getDocumentContentAction(workspaceId, doc.id, 0, EDITOR_PAGE_SIZE);
           if (contentResult.ok) {
             setDocumentContent(contentResult.data);
 
@@ -215,7 +217,7 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
     setAnnotations([]);
 
     const docId = editorData.documents[docIndex].id;
-    const contentResult = await getDocumentContentAction(workspaceId, docId);
+    const contentResult = await getDocumentContentAction(workspaceId, docId, 0, EDITOR_PAGE_SIZE);
     if (!contentResult.ok) {
       console.error('Failed to load document:', contentResult.error);
       return;
@@ -226,6 +228,13 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
     const annResult = await listNerAnnotationsAction(docId);
     setAnnotations(annResult.ok ? annResult.data : []);
   };
+
+  const pagination = usePaginatedDocument({
+    workspaceId,
+    documentContent,
+    setDocumentContent,
+    scrollRootRef: containerRef,
+  });
 
   // Token click handler — drives span selection
   const handleTokenClick = (globalIdx: number, e: React.MouseEvent) => {
@@ -639,6 +648,8 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
                 {renderTokenizedText()}
               </div>
             </div>
+
+            <EditorLoadMore {...pagination} />
 
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">
               Click a token to anchor the span start, then click another to set the end. Pick a tag from the left.

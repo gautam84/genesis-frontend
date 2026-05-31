@@ -942,7 +942,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+      <div className="h-screen overflow-hidden flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
         {/* Header */}
         <header className="border-b border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
           <div className="max-w-full mx-auto px-6 py-4 flex items-center justify-between">
@@ -1023,7 +1023,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
           </div>
         </header>
 
-        <div className="flex h-[calc(100vh-73px)]">
+        <div className="flex flex-1 min-h-0">
           {/* Left Pane - Mentions & Clusters */}
           <aside className="w-80 border-r border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10">
@@ -1356,7 +1356,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
           </main>
 
           {/* Right Pane - Instructions */}
-          <aside className="w-72 border-l border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm p-4">
+          <aside className="w-72 border-l border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
             <h3 className="font-bold text-slate-900 dark:text-white mb-4">How to Annotate</h3>
             <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
               <div className="flex gap-3">

@@ -325,13 +325,18 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
       setMentions(prev => [...prev, newMention]);
       undoStackRef.current.push({ type: 'mention', mentionId: newMention.id });
 
-      // If we're in linking mode, link with the new mention and reset
+      // If we're in linking mode, link the new mention into the current chain
+      // and STAY in linking mode — re-anchored to the JUST-LINKED mention so the
+      // dotted line grows from the latest link, until the user presses Esc.
       if (linkingFromMention) {
-        await linkMentions(linkingFromMention, newMention);
-        setLinkingFromMention(null);
+        const clusterId = await linkMentions(linkingFromMention, newMention);
+        if (clusterId) {
+          setLinkingFromMention({ ...newMention, clusterId });
+        }
         setSelectedMention(null);
       } else {
-        // Set as selected - user can click a cluster to assign, or click another word to link
+        // First mention of a chain: anchor linking here. User can click a
+        // cluster to assign, or click more words to keep linking.
         setLinkingFromMention(newMention);
         setSelectedMention(newMention);
       }
@@ -347,18 +352,25 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
 
     if (linkingFromMention) {
       if (linkingFromMention.id !== mention.id) {
-        // Complete the linking
-        await linkMentions(linkingFromMention, mention);
+        // Add this mention to the chain and re-anchor to it, so the dotted line
+        // grows from the latest link. Linking continues until the user hits Esc.
+        const clusterId = await linkMentions(linkingFromMention, mention);
+        if (clusterId) {
+          setLinkingFromMention({ ...mention, clusterId });
+        }
       }
-      setLinkingFromMention(null);
     } else {
       // Start linking from this mention
       setLinkingFromMention(mention);
     }
   };
 
-  // Link two mentions together
-  const linkMentions = async (mention1: MentionDto, mention2: MentionDto) => {
+  // Link two mentions together. Returns the cluster id they ended up in (or
+  // null on failure) so the caller can keep the linking session anchored to it.
+  const linkMentions = async (
+    mention1: MentionDto,
+    mention2: MentionDto,
+  ): Promise<string | null> => {
     let clusterId = mention1.clusterId || mention2.clusterId;
 
     if (!clusterId) {
@@ -367,7 +379,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
       });
       if (!clusterResult.ok) {
         toast.error(clusterResult.error || 'Failed to create cluster');
-        return;
+        return null;
       }
       clusterId = clusterResult.data.id;
       setClusters(prev => [...prev, clusterResult.data]);
@@ -381,14 +393,14 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
       const r = await assignToClusterAction(mention1.id, clusterId);
       if (!r.ok) {
         toast.error(r.error || 'Failed to link mention');
-        return;
+        return null;
       }
     }
     if (!mention2.clusterId) {
       const r = await assignToClusterAction(mention2.id, clusterId);
       if (!r.ok) {
         toast.error(r.error || 'Failed to link mention');
-        return;
+        return null;
       }
     }
 
@@ -398,6 +410,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     ]);
     if (mentionsResult.ok) setMentions(mentionsResult.data);
     if (clustersResult.ok) setClusters(clustersResult.data);
+    return clusterId;
   };
 
   // Delete mention
@@ -527,7 +540,8 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     ]);
     if (mentionsResult.ok) setMentions(mentionsResult.data);
     if (clustersResult.ok) setClusters(clustersResult.data);
-    setSelectedMention(null);
+    // Assigning via the cluster panel completes the action — exit linking mode.
+    cancelLinking();
   };
 
   // Cancel linking and selection
@@ -563,62 +577,6 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     };
   };
 
-  // Pre-rendered cluster-link arrow geometry. Computing this reads the DOM
-  // (getBoundingClientRect per mention), so we keep it in state and recompute
-  // only when the things that move mentions change — mentions, clusters, the
-  // loaded document content, or a resize — NOT on every render. This is what
-  // keeps mouse-move (which updates the linking arrow) from re-measuring every
-  // cluster arrow on each event.
-  const [clusterArrows, setClusterArrows] = useState<
-    { key: string; d: string; color: string }[]
-  >([]);
-
-  const recomputeClusterArrows = useCallback(() => {
-    const docId = documentContent?.documentId;
-    if (!cardContentRef.current || !docId) {
-      setClusterArrows([]);
-      return;
-    }
-    const containerRect = cardContentRef.current.getBoundingClientRect();
-    const posOf = (id: string) => {
-      const el = cardContentRef.current!.querySelector(
-        `[data-mention-id="${id}"]`,
-      ) as HTMLElement | null;
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return {
-        x: r.left - containerRect.left + r.width / 2,
-        y: r.top - containerRect.top + r.height / 2,
-      };
-    };
-
-    const arrows: { key: string; d: string; color: string }[] = [];
-    for (const cluster of clusters) {
-      const clusterMentions = mentions
-        .filter(m => m.clusterId === cluster.id && m.documentId === docId)
-        .sort((a, b) => a.startTokenIndex - b.startTokenIndex);
-      for (let i = 0; i < clusterMentions.length - 1; i++) {
-        const fromPos = posOf(clusterMentions[i].id);
-        const toPos = posOf(clusterMentions[i + 1].id);
-        if (!fromPos || !toPos) continue;
-        const midY = Math.max(fromPos.y, toPos.y) + 35;
-        arrows.push({
-          key: `${cluster.id}-${i}`,
-          color: cluster.color,
-          d: `M ${fromPos.x} ${fromPos.y + 15} Q ${(fromPos.x + toPos.x) / 2} ${midY} ${toPos.x} ${toPos.y + 15}`,
-        });
-      }
-    }
-    setClusterArrows(arrows);
-  }, [clusters, mentions, documentContent?.documentId]);
-
-  // Recompute after the relevant DOM has committed, and on window resize.
-  // documentContent (not just its id) is a dep so appended pages re-measure.
-  useEffect(() => {
-    recomputeClusterArrows();
-    window.addEventListener('resize', recomputeClusterArrows);
-    return () => window.removeEventListener('resize', recomputeClusterArrows);
-  }, [recomputeClusterArrows, documentContent]);
 
   // Undo the most recent reversible action (Cmd/Ctrl+Z)
   const performUndo = useCallback(async () => {
@@ -1478,7 +1436,6 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                   className={`p-8 relative ${busy ? 'cursor-wait' : ''}`}
                   ref={cardContentRef}
                   onMouseMove={handleMouseMove}
-                  onClick={cancelLinking}
                 >
                   <div className="text-lg leading-relaxed text-slate-900 dark:text-white relative z-10 select-none">
                     {renderTokenizedText()}
@@ -1511,19 +1468,6 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                       }
                       return null;
                     })()}
-
-                    {/* Permanent cluster arrows — geometry precomputed in state
-                        (see recomputeClusterArrows), not measured every render. */}
-                    {clusterArrows.map((arrow) => (
-                      <path
-                        key={arrow.key}
-                        d={arrow.d}
-                        stroke={arrow.color}
-                        strokeWidth="2"
-                        fill="none"
-                        opacity="0.6"
-                      />
-                    ))}
                   </svg>
 
                   {/* Cursor-following hint while linking, so the mode is unmissable */}

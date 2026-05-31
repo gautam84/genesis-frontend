@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -548,7 +548,8 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     }
   }, [linkingFromMention]);
 
-  // Get position of mention element for arrow drawing
+  // Get position of mention element for arrow drawing (relative to the card,
+  // so it is scroll-independent: the SVG overlay scrolls with the content).
   const getMentionPosition = (mentionId: string) => {
     const element = document.querySelector(`[data-mention-id="${mentionId}"]`) as HTMLElement;
     if (!element || !cardContentRef.current) return null;
@@ -561,6 +562,63 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
       y: elementRect.top - containerRect.top + elementRect.height / 2,
     };
   };
+
+  // Pre-rendered cluster-link arrow geometry. Computing this reads the DOM
+  // (getBoundingClientRect per mention), so we keep it in state and recompute
+  // only when the things that move mentions change — mentions, clusters, the
+  // loaded document content, or a resize — NOT on every render. This is what
+  // keeps mouse-move (which updates the linking arrow) from re-measuring every
+  // cluster arrow on each event.
+  const [clusterArrows, setClusterArrows] = useState<
+    { key: string; d: string; color: string }[]
+  >([]);
+
+  const recomputeClusterArrows = useCallback(() => {
+    const docId = documentContent?.documentId;
+    if (!cardContentRef.current || !docId) {
+      setClusterArrows([]);
+      return;
+    }
+    const containerRect = cardContentRef.current.getBoundingClientRect();
+    const posOf = (id: string) => {
+      const el = cardContentRef.current!.querySelector(
+        `[data-mention-id="${id}"]`,
+      ) as HTMLElement | null;
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return {
+        x: r.left - containerRect.left + r.width / 2,
+        y: r.top - containerRect.top + r.height / 2,
+      };
+    };
+
+    const arrows: { key: string; d: string; color: string }[] = [];
+    for (const cluster of clusters) {
+      const clusterMentions = mentions
+        .filter(m => m.clusterId === cluster.id && m.documentId === docId)
+        .sort((a, b) => a.startTokenIndex - b.startTokenIndex);
+      for (let i = 0; i < clusterMentions.length - 1; i++) {
+        const fromPos = posOf(clusterMentions[i].id);
+        const toPos = posOf(clusterMentions[i + 1].id);
+        if (!fromPos || !toPos) continue;
+        const midY = Math.max(fromPos.y, toPos.y) + 35;
+        arrows.push({
+          key: `${cluster.id}-${i}`,
+          color: cluster.color,
+          d: `M ${fromPos.x} ${fromPos.y + 15} Q ${(fromPos.x + toPos.x) / 2} ${midY} ${toPos.x} ${toPos.y + 15}`,
+        });
+      }
+    }
+    setClusterArrows(arrows);
+  }, [clusters, mentions, documentContent?.documentId]);
+
+  // Recompute after the relevant DOM has committed, and on window resize.
+  // documentContent (not just its id) is a dep so appended pages re-measure.
+  useEffect(() => {
+    recomputeClusterArrows();
+    window.addEventListener('resize', recomputeClusterArrows);
+    return () => window.removeEventListener('resize', recomputeClusterArrows);
+  }, [recomputeClusterArrows, documentContent]);
 
   // Undo the most recent reversible action (Cmd/Ctrl+Z)
   const performUndo = useCallback(async () => {
@@ -786,6 +844,42 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     return () => observer.disconnect();
   }, [sentinelEl, documentContent, loadNextPage, containerRef]);
 
+  // ---- Memoized render lookups -------------------------------------------
+  // The token render loop used to do a mentions.find + clusters.find for every
+  // token and a tokens.filter for every sentence (O(tokens²) overall). Precompute
+  // O(1) lookups so rendering a large document scales linearly.
+  const clusterById = useMemo(() => {
+    const map = new Map<string, ClusterDto>();
+    for (const c of clusters) map.set(c.id, c);
+    return map;
+  }, [clusters]);
+
+  // Key "sentenceIndex:tokenIndex" -> the mention covering that token, for the
+  // current document only. Overlapping mentions are prevented at creation, so
+  // each token maps to at most one mention.
+  const tokenMentionMap = useMemo(() => {
+    const map = new Map<string, MentionDto>();
+    const docId = documentContent?.documentId;
+    if (!docId) return map;
+    for (const m of mentions) {
+      if (m.documentId !== docId) continue;
+      for (let ti = m.startTokenIndex; ti <= m.endTokenIndex; ti++) {
+        map.set(`${m.sentenceIndex}:${ti}`, m);
+      }
+    }
+    return map;
+  }, [mentions, documentContent?.documentId]);
+
+  const tokensBySentence = useMemo(() => {
+    const map = new Map<number, TokenDto[]>();
+    for (const t of documentContent?.tokens ?? []) {
+      const arr = map.get(t.sentenceIndex);
+      if (arr) arr.push(t);
+      else map.set(t.sentenceIndex, [t]);
+    }
+    return map;
+  }, [documentContent?.tokens]);
+
   // Render tokens with annotations
   const renderTokenizedText = () => {
     if (!documentContent?.tokens?.length) {
@@ -801,21 +895,16 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     const hasMore = cur + 1 < total;
 
     const sentenceNodes = sentences.map((sentence, sentIdx) => {
-      // Get tokens for this sentence
-      const sentenceTokens = documentContent.tokens.filter(t => t.sentenceIndex === sentIdx);
+      // Get tokens for this sentence (precomputed group, not a per-sentence filter)
+      const sentenceTokens = tokensBySentence.get(sentIdx) ?? [];
 
       return (
         <div key={`sentence-${sentIdx}`} className="mb-2">
           {sentenceTokens.map((token, tokenIdx) => {
-            // Find if this token is part of a mention
-            const mention = mentions.find(
-              m => m.documentId === documentContent.documentId &&
-                m.sentenceIndex === token.sentenceIndex &&
-                token.tokenIndex >= m.startTokenIndex &&
-                token.tokenIndex <= m.endTokenIndex
-            );
+            // O(1) lookup: is this token part of a mention?
+            const mention = tokenMentionMap.get(`${token.sentenceIndex}:${token.tokenIndex}`);
 
-            const cluster = mention?.clusterId ? clusters.find(c => c.id === mention.clusterId) : null;
+            const cluster = mention?.clusterId ? clusterById.get(mention.clusterId) ?? null : null;
             const isFirstTokenOfMention = mention && token.tokenIndex === mention.startTokenIndex;
             const isLinking = linkingFromMention?.id === mention?.id;
             const isLinkTarget = linkingFromMention && mention && linkingFromMention.id !== mention.id;
@@ -1423,33 +1512,18 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                       return null;
                     })()}
 
-                    {/* Draw permanent arrows for clusters - only for current document */}
-                    {clusters.map((cluster) => {
-                      // Only show arrows for mentions in the current document
-                      const clusterMentions = mentions
-                        .filter(m => m.clusterId === cluster.id && m.documentId === documentContent?.documentId)
-                        .sort((a, b) => a.startTokenIndex - b.startTokenIndex);
-
-                      return clusterMentions.slice(0, -1).map((mention, idx) => {
-                        const fromPos = getMentionPosition(mention.id);
-                        const toPos = getMentionPosition(clusterMentions[idx + 1].id);
-
-                        if (fromPos && toPos) {
-                          const midY = Math.max(fromPos.y, toPos.y) + 35;
-                          return (
-                            <path
-                              key={`${cluster.id}-${idx}`}
-                              d={`M ${fromPos.x} ${fromPos.y + 15} Q ${(fromPos.x + toPos.x) / 2} ${midY} ${toPos.x} ${toPos.y + 15}`}
-                              stroke={cluster.color}
-                              strokeWidth="2"
-                              fill="none"
-                              opacity="0.6"
-                            />
-                          );
-                        }
-                        return null;
-                      });
-                    })}
+                    {/* Permanent cluster arrows — geometry precomputed in state
+                        (see recomputeClusterArrows), not measured every render. */}
+                    {clusterArrows.map((arrow) => (
+                      <path
+                        key={arrow.key}
+                        d={arrow.d}
+                        stroke={arrow.color}
+                        strokeWidth="2"
+                        fill="none"
+                        opacity="0.6"
+                      />
+                    ))}
                   </svg>
 
                   {/* Cursor-following hint while linking, so the mode is unmissable */}

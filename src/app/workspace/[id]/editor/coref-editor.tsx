@@ -43,6 +43,7 @@ import {
 import { updateDocumentStatusAction } from '@/lib/actions/document';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { FullScreenLoader } from '@/components/Spinner';
+import { toast } from 'sonner';
 
 // Cluster colors palette
 const CLUSTER_COLORS = [
@@ -79,6 +80,15 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
   const [showMergeConfirm, setShowMergeConfirm] = useState(false);
   const [merging, setMerging] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
+
+  // Guards against firing duplicate mutations while one is in flight
+  // (e.g. a fast double-click creating two mentions / racing a refetch).
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+
+  // Cluster delete confirmation (deleting a cluster unassigns all its mentions)
+  const [clusterToDelete, setClusterToDelete] = useState<ClusterDto | null>(null);
+  const [deletingCluster, setDeletingCluster] = useState(false);
 
   const cardContentRef = useRef<HTMLDivElement>(null); // For arrow positioning
   // Sentinel as state so the IntersectionObserver effect re-runs when the
@@ -188,7 +198,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     const docId = editorData.documents[docIndex].id;
     const contentResult = await getDocumentContentAction(workspaceId, docId, 0, PAGE_SIZE);
     if (!contentResult.ok) {
-      console.error('Failed to load document:', contentResult.error);
+      toast.error(contentResult.error || 'Failed to load document');
       return;
     }
     setDocumentContent(contentResult.data);
@@ -270,10 +280,13 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
         return;
       }
 
-      // Otherwise, overlapping selection - ignore for now (or could notify user)
-      console.warn("Selection overlaps with existing mention");
+      // Otherwise, overlapping selection - notify the user instead of failing silently
+      toast.info('That selection overlaps an existing mention.');
       return;
     }
+
+    // Guard against duplicate creates from a fast double-click / drag race
+    if (busyRef.current) return;
 
     // Construct text from tokens (simple join, could be improved with actual text offset slicing if available)
     const tokens = documentContent.tokens.filter(
@@ -281,29 +294,36 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     );
     const text = tokens.map(t => t.form).join(' ');
 
-    const mentionResult = await createMentionAction(workspaceId, {
-      documentId: documentContent.documentId,
-      sentenceIndex: sentenceIndex,
-      startTokenIndex: startIdx,
-      endTokenIndex: endIdx,
-      text: text,
-    });
-    if (!mentionResult.ok) {
-      console.error('Failed to create mention:', mentionResult.error);
-      return;
-    }
-    const newMention = mentionResult.data;
-    setMentions(prev => [...prev, newMention]);
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      const mentionResult = await createMentionAction(workspaceId, {
+        documentId: documentContent.documentId,
+        sentenceIndex: sentenceIndex,
+        startTokenIndex: startIdx,
+        endTokenIndex: endIdx,
+        text: text,
+      });
+      if (!mentionResult.ok) {
+        toast.error(mentionResult.error || 'Failed to create mention');
+        return;
+      }
+      const newMention = mentionResult.data;
+      setMentions(prev => [...prev, newMention]);
 
-    // If we're in linking mode, link with the new mention and reset
-    if (linkingFromMention) {
-      await linkMentions(linkingFromMention, newMention);
-      setLinkingFromMention(null);
-      setSelectedMention(null);
-    } else {
-      // Set as selected - user can click a cluster to assign, or click another word to link
-      setLinkingFromMention(newMention);
-      setSelectedMention(newMention);
+      // If we're in linking mode, link with the new mention and reset
+      if (linkingFromMention) {
+        await linkMentions(linkingFromMention, newMention);
+        setLinkingFromMention(null);
+        setSelectedMention(null);
+      } else {
+        // Set as selected - user can click a cluster to assign, or click another word to link
+        setLinkingFromMention(newMention);
+        setSelectedMention(newMention);
+      }
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
   };
 
@@ -332,7 +352,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
         color: CLUSTER_COLORS[clusters.length % CLUSTER_COLORS.length],
       });
       if (!clusterResult.ok) {
-        console.error('Failed to create cluster:', clusterResult.error);
+        toast.error(clusterResult.error || 'Failed to create cluster');
         return;
       }
       clusterId = clusterResult.data.id;
@@ -343,14 +363,14 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     if (!mention1.clusterId) {
       const r = await assignToClusterAction(mention1.id, clusterId);
       if (!r.ok) {
-        console.error('Failed to assign mention to cluster:', r.error);
+        toast.error(r.error || 'Failed to link mention');
         return;
       }
     }
     if (!mention2.clusterId) {
       const r = await assignToClusterAction(mention2.id, clusterId);
       if (!r.ok) {
-        console.error('Failed to assign mention to cluster:', r.error);
+        toast.error(r.error || 'Failed to link mention');
         return;
       }
     }
@@ -367,20 +387,24 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
   const handleDeleteMention = async (mentionId: string) => {
     const result = await deleteMentionAction(mentionId);
     if (!result.ok) {
-      console.error('Failed to delete mention:', result.error);
+      toast.error(result.error || 'Failed to delete mention');
       return;
     }
     setMentions(prev => prev.filter(m => m.id !== mentionId));
   };
 
-  // Delete cluster (unassigns all mentions in this cluster)
+  // Delete cluster (unassigns all mentions in this cluster).
+  // Destructive, so it runs behind a confirmation dialog (clusterToDelete).
   // Backend compacts cluster numbers after delete, so re-fetch BOTH clusters
   // (to pick up renumbered cluster_number values) AND mentions (mentions carry
   // cached clusterNumber too).
-  const handleDeleteCluster = async (clusterId: string) => {
-    const deleteResult = await deleteClusterAction(clusterId);
+  const handleDeleteClusterConfirmed = async () => {
+    if (!clusterToDelete) return;
+    setDeletingCluster(true);
+    const deleteResult = await deleteClusterAction(clusterToDelete.id);
     if (!deleteResult.ok) {
-      console.error('Failed to delete cluster:', deleteResult.error);
+      toast.error(deleteResult.error || 'Failed to delete cluster');
+      setDeletingCluster(false);
       return;
     }
     const [clustersResult, mentionsResult] = await Promise.all([
@@ -389,6 +413,8 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     ]);
     if (clustersResult.ok) setClusters(clustersResult.data);
     if (mentionsResult.ok) setMentions(mentionsResult.data);
+    setDeletingCluster(false);
+    setClusterToDelete(null);
   };
 
   // ==================== Cluster Merge Handlers ====================
@@ -475,7 +501,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
 
     const assignResult = await assignToClusterAction(selectedMention.id, clusterId);
     if (!assignResult.ok) {
-      console.error('Failed to assign to cluster:', assignResult.error);
+      toast.error(assignResult.error || 'Failed to assign to cluster');
       return;
     }
     const [mentionsResult, clustersResult] = await Promise.all([
@@ -677,10 +703,10 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
             return (
               <span
                 key={`token-${sentIdx}-${tokenIdx}`}
-                className={`cursor-pointer rounded px-0.5 transition-colors ${isSelected
+                className={`cursor-pointer rounded px-0.5 transition-all ${isSelected
                   ? 'bg-blue-300 dark:bg-blue-700'
                   : 'hover:bg-blue-100 dark:hover:bg-blue-900/30'
-                  }`}
+                  } ${linkingFromMention ? 'opacity-40' : ''}`}
                 onMouseDown={(e) => handleTokenMouseDown(token, e)}
                 onMouseEnter={() => handleTokenMouseEnter(token)}
                 onMouseUp={(e) => handleTokenMouseUp(token, e)}
@@ -819,7 +845,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                   const newStatus = doc.status === 'COMPLETE' ? 'ANNOTATING' : 'COMPLETE';
                   const result = await updateDocumentStatusAction(doc.id, newStatus);
                   if (!result.ok) {
-                    console.error('Failed to update status:', result.error);
+                    toast.error(result.error || 'Failed to update document status');
                     return;
                   }
                   const newDocs = [...editorData.documents];
@@ -991,7 +1017,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                           className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteCluster(cluster.id);
+                            setClusterToDelete(cluster);
                           }}
                           title="Delete cluster"
                         >
@@ -1104,7 +1130,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
 
               <Card className="shadow-lg min-h-[600px]">
                 <CardContent
-                  className="p-8 relative"
+                  className={`p-8 relative ${busy ? 'cursor-wait' : ''}`}
                   ref={cardContentRef}
                   onMouseMove={handleMouseMove}
                   onClick={cancelLinking}
@@ -1118,15 +1144,19 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                     className="absolute inset-0 pointer-events-none"
                     style={{ width: '100%', height: '100%', zIndex: 5 }}
                   >
-                    {/* Draw arrow while linking */}
+                    {/* Draw arrow while linking — tinted with the source mention's
+                        cluster color when it already belongs to one. */}
                     {linkingFromMention && mousePosition && (() => {
                       const fromPos = getMentionPosition(linkingFromMention.id);
                       if (fromPos) {
+                        const sourceCluster = linkingFromMention.clusterId
+                          ? clusters.find(c => c.id === linkingFromMention.clusterId)
+                          : null;
                         const midY = Math.max(fromPos.y, mousePosition.y) + 40;
                         return (
                           <path
                             d={`M ${fromPos.x} ${fromPos.y + 15} Q ${(fromPos.x + mousePosition.x) / 2} ${midY} ${mousePosition.x} ${mousePosition.y}`}
-                            stroke="#3b82f6"
+                            stroke={sourceCluster?.color || '#3b82f6'}
                             strokeWidth="2"
                             fill="none"
                             strokeDasharray="5,5"
@@ -1165,6 +1195,16 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                       });
                     })}
                   </svg>
+
+                  {/* Cursor-following hint while linking, so the mode is unmissable */}
+                  {linkingFromMention && mousePosition && (
+                    <div
+                      className="absolute z-20 pointer-events-none -translate-y-full -translate-x-1/2 whitespace-nowrap rounded-full bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow-lg"
+                      style={{ left: mousePosition.x, top: mousePosition.y - 12 }}
+                    >
+                      Click a mention to link · ESC to cancel
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -1290,6 +1330,60 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
                 </>
               ) : (
                 'Confirm merge'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete cluster confirmation dialog */}
+      <Dialog
+        open={clusterToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletingCluster) setClusterToDelete(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete cluster?</DialogTitle>
+            <DialogDescription>
+              {clusterToDelete && (() => {
+                const count = mentions.filter(m => m.clusterId === clusterToDelete.id).length;
+                return (
+                  <>
+                    Delete <strong>Cluster {clusterToDelete.clusterNumber}</strong>?{' '}
+                    {count} mention{count === 1 ? '' : 's'} will be unassigned (the
+                    mentions themselves are kept). Cluster numbers will be renumbered to
+                    stay sequential.
+                  </>
+                );
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setClusterToDelete(null)}
+              disabled={deletingCluster}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleDeleteClusterConfirmed}
+              disabled={deletingCluster}
+            >
+              {deletingCluster ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Deleting...
+                </>
+              ) : (
+                'Delete cluster'
               )}
             </Button>
           </DialogFooter>

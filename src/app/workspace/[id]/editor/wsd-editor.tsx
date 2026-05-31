@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -22,6 +22,8 @@ import {
   listSensesAction,
   upsertAnnotationAction,
 } from '@/lib/actions/wsd';
+import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/hooks/usePaginatedDocument';
+import { EditorLoadMore } from '@/components/editor/EditorLoadMore';
 
 interface WsdEditorProps {
   workspaceId: string;
@@ -35,6 +37,7 @@ export default function WsdEditor({ workspaceId, workspaceName }: WsdEditorProps
 
   const [editorData, setEditorData] = useState<WorkspaceEditorResponse | null>(null);
   const [documentContent, setDocumentContent] = useState<DocumentContentResponse | null>(null);
+  const scrollRootRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +59,7 @@ export default function WsdEditor({ workspaceId, workspaceName }: WsdEditorProps
       }
       setCurrentDocIndex(idx);
       setSelectedToken(null);
-      const result = await getDocumentContentAction(workspaceId, doc.id);
+      const result = await getDocumentContentAction(workspaceId, doc.id, 0, EDITOR_PAGE_SIZE);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -66,6 +69,13 @@ export default function WsdEditor({ workspaceId, workspaceName }: WsdEditorProps
     },
     [workspaceId],
   );
+
+  const pagination = usePaginatedDocument({
+    workspaceId,
+    documentContent,
+    setDocumentContent,
+    scrollRootRef,
+  });
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -191,7 +201,7 @@ export default function WsdEditor({ workspaceId, workspaceName }: WsdEditorProps
       </header>
 
       <div className="flex flex-1 h-[calc(100vh-57px)]">
-        <main className="flex-1 overflow-y-auto p-8">
+        <main ref={scrollRootRef} className="flex-1 overflow-y-auto p-8">
           {editorData.documents.length > 1 && (
             <div className="flex gap-2 mb-4 flex-wrap">
               {editorData.documents.map((doc, idx) => (
@@ -240,6 +250,8 @@ export default function WsdEditor({ workspaceId, workspaceName }: WsdEditorProps
               </div>
             </CardContent>
           </Card>
+
+          <EditorLoadMore {...pagination} />
         </main>
 
         {/* Right pane — sense picker */}

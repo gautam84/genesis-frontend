@@ -326,12 +326,12 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
       undoStackRef.current.push({ type: 'mention', mentionId: newMention.id });
 
       // If we're in linking mode, link the new mention into the current chain
-      // and STAY in linking mode (re-anchored to the cluster) so the user can
-      // keep adding words to the same cluster until they press Esc.
+      // and STAY in linking mode — re-anchored to the JUST-LINKED mention so the
+      // dotted line grows from the latest link, until the user presses Esc.
       if (linkingFromMention) {
         const clusterId = await linkMentions(linkingFromMention, newMention);
         if (clusterId) {
-          setLinkingFromMention({ ...linkingFromMention, clusterId });
+          setLinkingFromMention({ ...newMention, clusterId });
         }
         setSelectedMention(null);
       } else {
@@ -352,11 +352,11 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
 
     if (linkingFromMention) {
       if (linkingFromMention.id !== mention.id) {
-        // Add this mention to the chain and stay anchored to the cluster so
-        // linking continues until the user presses Esc.
+        // Add this mention to the chain and re-anchor to it, so the dotted line
+        // grows from the latest link. Linking continues until the user hits Esc.
         const clusterId = await linkMentions(linkingFromMention, mention);
         if (clusterId) {
-          setLinkingFromMention({ ...linkingFromMention, clusterId });
+          setLinkingFromMention({ ...mention, clusterId });
         }
       }
     } else {

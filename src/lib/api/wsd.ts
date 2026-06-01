@@ -16,6 +16,8 @@ export interface WsdAnnotation {
     id: string;
     tokenId: string;
     senseId: string;
+    /** Resolved sense label; populated by the document-level fetch, may be absent on per-token fetches. */
+    senseLabel?: string | null;
     annotatorId: string;
     workspaceId: string;
     timestamp: string;

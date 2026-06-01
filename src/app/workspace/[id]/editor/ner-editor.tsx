@@ -46,6 +46,8 @@ import { updateDocumentStatusAction } from '@/lib/actions/document';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/hooks/usePaginatedDocument';
 import { EditorLoadMore } from '@/components/editor/EditorLoadMore';
+import { DocumentSwitcher } from '@/components/editor/DocumentSwitcher';
+import { EditorHelpPanel } from '@/components/editor/EditorHelpPanel';
 import { FullScreenLoader } from '@/components/Spinner';
 import { toast } from 'sonner';
 
@@ -457,13 +459,6 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
     currentDocIndex,
   ]);
 
-  // Keep the active document button visible in the scrollable strip
-  useEffect(() => {
-    document
-      .querySelector('[data-doc-active="true"]')
-      ?.scrollIntoView({ block: 'nearest', inline: 'center' });
-  }, [currentDocIndex]);
-
   const openAddTagDialog = () => {
     setNewTagName('');
     setNewTagDescription('');
@@ -627,7 +622,6 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
       .join(' ');
   };
 
-  const completeCount = editorData.documents.filter(d => d.status === 'COMPLETE').length;
   const isCurrentComplete = editorData.documents[currentDocIndex]?.status === 'COMPLETE';
 
   return (
@@ -769,74 +763,11 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
         >
           <div className="max-w-5xl mx-auto">
             {/* Document switcher: scrollable strip + prev/next + progress */}
-            {editorData.documents.length > 0 && (
-              <div className="flex items-center gap-2 mb-6">
-                {editorData.documents.length > 1 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="px-2 flex-shrink-0"
-                    disabled={currentDocIndex <= 0}
-                    onClick={() => loadDocumentContent(currentDocIndex - 1)}
-                    title="Previous document ( [ )"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </Button>
-                )}
-
-                <div className="flex gap-2 overflow-x-auto py-1 flex-1">
-                  {editorData.documents.map((doc, idx) => {
-                    const isComplete = doc.status === 'COMPLETE';
-                    const isActive = currentDocIndex === idx;
-                    return (
-                      <Button
-                        key={doc.id}
-                        data-doc-active={isActive}
-                        variant={isActive ? 'default' : 'outline'}
-                        size="sm"
-                        className="flex-shrink-0 gap-1.5"
-                        onClick={() => loadDocumentContent(idx)}
-                        title={isComplete ? `${doc.name} — complete` : doc.name}
-                      >
-                        <span
-                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                            isComplete
-                              ? 'bg-green-500'
-                              : isActive
-                                ? 'bg-white/70'
-                                : 'bg-slate-300 dark:bg-slate-600'
-                          }`}
-                        />
-                        {doc.name}
-                      </Button>
-                    );
-                  })}
-                </div>
-
-                {editorData.documents.length > 1 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="px-2 flex-shrink-0"
-                    disabled={currentDocIndex >= editorData.documents.length - 1}
-                    onClick={() => loadDocumentContent(currentDocIndex + 1)}
-                    title="Next document ( ] )"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Button>
-                )}
-
-                <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0 whitespace-nowrap ml-1">
-                  Doc {currentDocIndex + 1}/{editorData.documents.length}
-                  {' · '}
-                  {completeCount} complete
-                </span>
-              </div>
-            )}
+            <DocumentSwitcher
+              documents={editorData.documents}
+              currentDocIndex={currentDocIndex}
+              onSelect={loadDocumentContent}
+            />
 
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
               <div className="text-slate-900 dark:text-white" style={{ lineHeight: '2.5' }}>
@@ -857,66 +788,21 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
         {/* Right pane: how-to + spans for this document */}
         <aside className="w-80 border-l border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
           {/* How to annotate */}
-          <details  className="border-b border-slate-200 dark:border-slate-800">
-            <summary className="cursor-pointer select-none p-4 text-lg font-bold text-slate-900 dark:text-white">
-              How to Annotate
-            </summary>
-            <div className="px-4 pb-4">
-              <div className="space-y-3 text-sm text-slate-600 dark:text-slate-400">
-                <div className="flex gap-3">
-                  <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-bold text-indigo-600">1</span>
-                  </div>
-                  <p><strong>Click a token</strong> to anchor the span start</p>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-bold text-indigo-600">2</span>
-                  </div>
-                  <p><strong>Click another token</strong> to set the span end</p>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-bold text-indigo-600">3</span>
-                  </div>
-                  <p><strong>Pick a tag</strong> from the palette (click or press 1–9). Nested and overlapping spans are allowed</p>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[10px] font-bold text-gray-600">ESC</span>
-                  </div>
-                  <p>Press <strong>ESC</strong> to cancel the current selection</p>
-                </div>
-              </div>
-
-              <Separator className="my-4" />
-
-              <h3 className="font-bold text-slate-900 dark:text-white mb-3">Keyboard Shortcuts</h3>
-              <div className="space-y-2 text-sm">
-                {[
-                  { keys: ['1', '–', '9'], label: 'Label the pending span' },
-                  { keys: ['Del'], label: 'Delete span under cursor' },
-                  { keys: ['[', ']'], label: 'Previous / next document' },
-                  { keys: ['⌘/Ctrl', '↵'], label: 'Mark complete & advance' },
-                  { keys: ['Esc'], label: 'Cancel selection' },
-                ].map((s) => (
-                  <div key={s.label} className="flex items-center justify-between gap-3">
-                    <span className="text-slate-600 dark:text-slate-400">{s.label}</span>
-                    <span className="flex items-center gap-1 flex-shrink-0">
-                      {s.keys.map((k) => (
-                        <kbd
-                          key={k}
-                          className="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-mono text-slate-700 dark:text-slate-300"
-                        >
-                          {k}
-                        </kbd>
-                      ))}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </details>
+          <EditorHelpPanel
+            steps={[
+              { badge: '1', body: <><strong>Click a token</strong> to anchor the span start</> },
+              { badge: '2', body: <><strong>Click another token</strong> to set the span end</> },
+              { badge: '3', body: <><strong>Pick a tag</strong> from the palette (click or press 1–9). Nested and overlapping spans are allowed</> },
+              { badge: 'ESC', body: <>Press <strong>ESC</strong> to cancel the current selection</> },
+            ]}
+            shortcuts={[
+              { keys: ['1', '–', '9'], label: 'Label the pending span' },
+              { keys: ['Del'], label: 'Delete span under cursor' },
+              { keys: ['[', ']'], label: 'Previous / next document' },
+              { keys: ['⌘/Ctrl', '↵'], label: 'Mark complete & advance' },
+              { keys: ['Esc'], label: 'Cancel selection' },
+            ]}
+          />
 
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">

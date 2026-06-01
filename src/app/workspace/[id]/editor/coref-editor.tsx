@@ -42,6 +42,8 @@ import {
 } from '@/lib/actions/coref';
 import { updateDocumentStatusAction } from '@/lib/actions/document';
 import { useEditorSession } from '@/hooks/useEditorSession';
+import { DocumentSwitcher } from '@/components/editor/DocumentSwitcher';
+import { EditorHelpPanel } from '@/components/editor/EditorHelpPanel';
 import { FullScreenLoader } from '@/components/Spinner';
 import { toast } from 'sonner';
 
@@ -722,13 +724,6 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     showMergeConfirm,
   ]);
 
-  // Keep the active document button visible in the scrollable strip
-  useEffect(() => {
-    document
-      .querySelector('[data-doc-active="true"]')
-      ?.scrollIntoView({ block: 'nearest', inline: 'center' });
-  }, [currentDocIndex]);
-
   // Cross-highlight: clicking a mention in the left pane reveals it in the text.
   // If the mention lives in another document, switch to that document first.
   const revealMentionInText = (mention: MentionDto) => {
@@ -1362,74 +1357,11 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
           >
             <div className="p-8">
               {/* Document switcher: scrollable strip + prev/next + progress */}
-              {editorData.documents.length > 0 && (
-                <div className="flex items-center gap-2 mb-4">
-                  {editorData.documents.length > 1 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="px-2 flex-shrink-0"
-                      disabled={currentDocIndex <= 0}
-                      onClick={() => loadDocumentContent(currentDocIndex - 1)}
-                      title="Previous document ( [ )"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </Button>
-                  )}
-
-                  <div className="flex gap-2 overflow-x-auto py-1 flex-1">
-                    {editorData.documents.map((doc, idx) => {
-                      const isComplete = doc.status === 'COMPLETE';
-                      const isActive = currentDocIndex === idx;
-                      return (
-                        <Button
-                          key={doc.id}
-                          data-doc-active={isActive}
-                          variant={isActive ? 'default' : 'outline'}
-                          size="sm"
-                          className="flex-shrink-0 gap-1.5"
-                          onClick={() => loadDocumentContent(idx)}
-                          title={isComplete ? `${doc.name} — complete` : doc.name}
-                        >
-                          <span
-                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                              isComplete
-                                ? 'bg-green-500'
-                                : isActive
-                                  ? 'bg-white/70'
-                                  : 'bg-slate-300 dark:bg-slate-600'
-                            }`}
-                          />
-                          {doc.name}
-                        </Button>
-                      );
-                    })}
-                  </div>
-
-                  {editorData.documents.length > 1 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="px-2 flex-shrink-0"
-                      disabled={currentDocIndex >= editorData.documents.length - 1}
-                      onClick={() => loadDocumentContent(currentDocIndex + 1)}
-                      title="Next document ( ] )"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Button>
-                  )}
-
-                  <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0 whitespace-nowrap ml-1">
-                    Doc {currentDocIndex + 1}/{editorData.documents.length}
-                    {' · '}
-                    {editorData.documents.filter(d => d.status === 'COMPLETE').length} complete
-                  </span>
-                </div>
-              )}
+              <DocumentSwitcher
+                documents={editorData.documents}
+                currentDocIndex={currentDocIndex}
+                onSelect={loadDocumentContent}
+              />
 
               <Card className="shadow-lg min-h-[600px]">
                 <CardContent
@@ -1485,61 +1417,23 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
           </main>
 
           {/* Right Pane - Instructions */}
-          <aside className="w-72 border-l border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-            <h3 className="font-bold text-slate-900 dark:text-white mb-4">How to Annotate</h3>
-            <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
-              <div className="flex gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-blue-600">1</span>
-                </div>
-                <p><strong>Click a word</strong> to create a mention (entity reference)</p>
-              </div>
-              <div className="flex gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-blue-600">2</span>
-                </div>
-                <p><strong>Click another word</strong> to automatically link them in a coreference chain</p>
-              </div>
-              <div className="flex gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-blue-600">3</span>
-                </div>
-                <p><strong>Click existing mentions</strong> to link them together</p>
-              </div>
-              <div className="flex gap-3">
-                <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-gray-600">ESC</span>
-                </div>
-                <p>Press <strong>ESC</strong> to cancel linking mode</p>
-              </div>
-            </div>
-
-            <Separator className="my-6" />
-
-            <h3 className="font-bold text-slate-900 dark:text-white mb-4">Keyboard Shortcuts</h3>
-            <div className="space-y-2 text-sm">
-              {[
+          <aside className="w-72 border-l border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+            <EditorHelpPanel
+              accent="blue"
+              steps={[
+                { badge: '1', body: <><strong>Click a word</strong> to create a mention (entity reference)</> },
+                { badge: '2', body: <><strong>Click another word</strong> to automatically link them in a coreference chain</> },
+                { badge: '3', body: <><strong>Click existing mentions</strong> to link them together</> },
+                { badge: 'ESC', body: <>Press <strong>ESC</strong> to cancel linking mode</> },
+              ]}
+              shortcuts={[
                 { keys: ['Del'], label: 'Delete mention under cursor' },
                 { keys: ['⌘/Ctrl', 'Z'], label: 'Undo last mention / link' },
                 { keys: ['[', ']'], label: 'Previous / next document' },
                 { keys: ['⌘/Ctrl', '↵'], label: 'Mark complete & advance' },
                 { keys: ['Esc'], label: 'Cancel linking' },
-              ].map((s) => (
-                <div key={s.label} className="flex items-center justify-between gap-3">
-                  <span className="text-slate-600 dark:text-slate-400">{s.label}</span>
-                  <span className="flex items-center gap-1 flex-shrink-0">
-                    {s.keys.map((k) => (
-                      <kbd
-                        key={k}
-                        className="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-mono text-slate-700 dark:text-slate-300"
-                      >
-                        {k}
-                      </kbd>
-                    ))}
-                  </span>
-                </div>
-              ))}
-            </div>
+              ]}
+            />
           </aside>
         </div>
       </div>

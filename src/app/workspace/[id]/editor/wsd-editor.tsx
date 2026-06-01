@@ -24,6 +24,7 @@ import {
 } from '@/lib/actions/wsd';
 import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/hooks/usePaginatedDocument';
 import { EditorLoadMore } from '@/components/editor/EditorLoadMore';
+import { DocumentSwitcher } from '@/components/editor/DocumentSwitcher';
 
 interface WsdEditorProps {
   workspaceId: string;
@@ -202,20 +203,11 @@ export default function WsdEditor({ workspaceId, workspaceName }: WsdEditorProps
 
       <div className="flex flex-1 h-[calc(100vh-57px)]">
         <main ref={scrollRootRef} className="flex-1 overflow-y-auto p-8">
-          {editorData.documents.length > 1 && (
-            <div className="flex gap-2 mb-4 flex-wrap">
-              {editorData.documents.map((doc, idx) => (
-                <Button
-                  key={doc.id}
-                  variant={currentDocIndex === idx ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => loadDocumentAt(idx, editorData.documents)}
-                >
-                  {doc.name}
-                </Button>
-              ))}
-            </div>
-          )}
+          <DocumentSwitcher
+            documents={editorData.documents}
+            currentDocIndex={currentDocIndex}
+            onSelect={(idx) => loadDocumentAt(idx, editorData.documents)}
+          />
 
           <Card className="shadow-lg min-h-[600px]">
             <CardContent className="p-8">

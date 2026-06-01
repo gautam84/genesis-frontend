@@ -46,12 +46,25 @@ import { updateDocumentStatusAction } from '@/lib/actions/document';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/hooks/usePaginatedDocument';
 import { EditorLoadMore } from '@/components/editor/EditorLoadMore';
+import { DocumentSwitcher } from '@/components/editor/DocumentSwitcher';
+import { EditorHelpPanel } from '@/components/editor/EditorHelpPanel';
 import { FullScreenLoader } from '@/components/Spinner';
+import { toast } from 'sonner';
 
 const CUSTOM_TAG_PALETTE = [
   '#0ea5e9', '#22c55e', '#f97316', '#a855f7', '#eab308',
   '#ec4899', '#14b8a6', '#f43f5e', '#6366f1', '#84cc16',
 ];
+
+// Group flat annotations into Record<tokenId, PosAnnotation[]>.
+function groupAnnotationsByToken(annotations: PosAnnotation[]): Record<string, PosAnnotation[]> {
+  const out: Record<string, PosAnnotation[]> = {};
+  for (const a of annotations) {
+    if (!out[a.tokenId]) out[a.tokenId] = [];
+    out[a.tokenId].push(a);
+  }
+  return out;
+}
 
 function mergeTagDefinitions(defs: PosTagDefinition[]): PosTag[] {
   const builtinByTag = new Map(UNIVERSAL_POS_TAGS.map(t => [t.tag, t]));
@@ -201,8 +214,8 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
   }, [workspaceId, workspaceName, containerRef, lastScrollRef]);
 
   // Load document content when switching documents
-  const loadDocumentContent = async (docIndex: number) => {
-    if (!editorData || docIndex >= editorData.documents.length) return;
+  const loadDocumentContent = useCallback(async (docIndex: number) => {
+    if (!editorData || docIndex < 0 || docIndex >= editorData.documents.length) return;
 
     const scrollPos = containerRef.current?.scrollTop || 0;
     // Session save is best-effort; ignore its result.
@@ -219,7 +232,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
     const docId = editorData.documents[docIndex].id;
     const contentResult = await getDocumentContentAction(workspaceId, docId, 0, EDITOR_PAGE_SIZE);
     if (!contentResult.ok) {
-      console.error('Failed to load document:', contentResult.error);
+      toast.error(contentResult.error || 'Failed to load document');
       return;
     }
     setDocumentContent(contentResult.data);
@@ -229,7 +242,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
     setAnnotationsByToken(
       annResult.ok ? groupAnnotationsByToken(annResult.data || []) : {},
     );
-  };
+  }, [editorData, workspaceId, containerRef]);
 
   const pagination = usePaginatedDocument({
     workspaceId,
@@ -237,16 +250,6 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
     setDocumentContent,
     scrollRootRef: containerRef,
   });
-
-  // Helper: group flat annotations into Record<tokenId, PosAnnotation[]>
-  function groupAnnotationsByToken(annotations: PosAnnotation[]): Record<string, PosAnnotation[]> {
-    const out: Record<string, PosAnnotation[]> = {};
-    for (const a of annotations) {
-      if (!out[a.tokenId]) out[a.tokenId] = [];
-      out[a.tokenId].push(a);
-    }
-    return out;
-  }
 
   // Handle token click - select it for tagging
   const handleTokenClick = (token: TokenDto, e: React.MouseEvent) => {
@@ -273,7 +276,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
 
     const result = await updateTokenPosAction(tokenId, posTag);
     if (!result.ok) {
-      console.error('Failed to update POS tag:', result.error);
+      toast.error(result.error || 'Failed to update POS tag');
       // Revert on error
       setLocalPosMap(prev => {
         const next = { ...prev };
@@ -379,15 +382,61 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
     }
   }, [selectedTokenId, applyPosTag]);
 
+  // Toggle the current document's complete status, auto-advancing to the next
+  // document when marking complete (⌘/Ctrl+Enter, or the header button). Mirrors
+  // COREF/NER.
+  const toggleComplete = useCallback(async () => {
+    if (!editorData) return;
+    const doc = editorData.documents[currentDocIndex];
+    if (!doc) return;
+    const newStatus = doc.status === 'COMPLETE' ? 'ANNOTATING' : 'COMPLETE';
+    const result = await updateDocumentStatusAction(doc.id, newStatus);
+    if (!result.ok) {
+      toast.error(result.error || 'Failed to update document status');
+      return;
+    }
+    const newDocs = [...editorData.documents];
+    newDocs[currentDocIndex] = { ...doc, status: newStatus };
+    setEditorData({ ...editorData, documents: newDocs });
+
+    if (newStatus === 'COMPLETE') {
+      if (currentDocIndex < editorData.documents.length - 1) {
+        loadDocumentContent(currentDocIndex + 1);
+      } else {
+        toast.success('All documents complete 🎉');
+      }
+    }
+  }, [editorData, currentDocIndex, loadDocumentContent]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
+      // Mark complete & advance — ⌘/Ctrl+Enter (checked before the bare-Enter
+      // palette-apply branch below).
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        toggleComplete();
+        return;
+      }
+
       if (e.key === 'Escape') {
         setSelectedTokenId(null);
         setSelectedPosTag(null);
+        return;
+      }
+
+      // Previous / next document
+      if (e.key === '[') {
+        e.preventDefault();
+        loadDocumentContent(currentDocIndex - 1);
+        return;
+      }
+      if (e.key === ']') {
+        e.preventDefault();
+        loadDocumentContent(currentDocIndex + 1);
         return;
       }
 
@@ -450,7 +499,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [advanceToNextToken, moveToPrevToken, clearSelectedTokenPos, selectedTokenId, selectedPosTag, applyPosTag, availableTags]);
+  }, [advanceToNextToken, moveToPrevToken, clearSelectedTokenPos, selectedTokenId, selectedPosTag, applyPosTag, availableTags, toggleComplete, loadDocumentContent, currentDocIndex]);
 
   const openAddTagDialog = () => {
     setNewTagName('');
@@ -594,6 +643,14 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
           </div>
           <h1 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">Cannot Load Editor</h1>
           <p className="text-slate-600 dark:text-slate-400 mb-6">{error}</p>
+          <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-4 text-left mb-6">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">To fix this:</p>
+            <ol className="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-decimal list-inside">
+              <li>Start the backend: <code className="bg-slate-200 dark:bg-slate-700 px-1 rounded">genesis.bat run</code></li>
+              <li>Ensure a document is uploaded to the workspace</li>
+              <li>Wait for document tokenization to complete</li>
+            </ol>
+          </div>
           <div className="flex gap-3 justify-center">
             <Button variant="outline" onClick={() => window.location.reload()}>Try Again</Button>
             <Button onClick={() => router.push(`/workspace/${workspaceId}`)}>Back to Workspace</Button>
@@ -664,18 +721,8 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
               variant={editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? 'default' : 'outline'}
               size="sm"
               className={editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}
-              onClick={async () => {
-                const doc = editorData.documents[currentDocIndex];
-                const newStatus = doc.status === 'COMPLETE' ? 'ANNOTATING' : 'COMPLETE';
-                const result = await updateDocumentStatusAction(doc.id, newStatus);
-                if (!result.ok) {
-                  console.error('Failed to update status:', result.error);
-                  return;
-                }
-                const newDocs = [...editorData.documents];
-                newDocs[currentDocIndex] = { ...doc, status: newStatus };
-                setEditorData({ ...editorData, documents: newDocs });
-              }}
+              title="Mark complete & advance (⌘/Ctrl+Enter)"
+              onClick={toggleComplete}
             >
               {editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? (
                 <>
@@ -788,21 +835,12 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
           onClick={() => { setSelectedTokenId(null); }}
         >
           <div className="p-8">
-            {/* Document Tabs */}
-            {editorData.documents.length > 1 && (
-              <div className="flex gap-2 mb-4 flex-wrap">
-                {editorData.documents.map((doc, idx) => (
-                  <Button
-                    key={doc.id}
-                    variant={currentDocIndex === idx ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => loadDocumentContent(idx)}
-                  >
-                    {doc.name}
-                  </Button>
-                ))}
-              </div>
-            )}
+            {/* Document switcher: scrollable strip + prev/next + progress */}
+            <DocumentSwitcher
+              documents={editorData.documents}
+              currentDocIndex={currentDocIndex}
+              onSelect={loadDocumentContent}
+            />
 
             <Card className="shadow-lg min-h-[600px]">
               <CardContent className="p-8" onClick={(e) => e.stopPropagation()}>
@@ -817,58 +855,25 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
         </main>
 
         {/* Right Pane - Instructions & Statistics */}
-        <aside className="w-72 border-l border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <h3 className="font-bold text-slate-900 dark:text-white mb-4">How to Annotate</h3>
-          <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
-            <div className="flex gap-3">
-              <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-bold text-blue-600">1</span>
-              </div>
-              <p><strong>Select a POS tag</strong> from the left palette</p>
-            </div>
-            <div className="flex gap-3">
-              <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-bold text-blue-600">2</span>
-              </div>
-              <p><strong>Click tokens</strong> in the text to apply the tag</p>
-            </div>
-            <div className="flex gap-3">
-              <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-bold text-blue-600">3</span>
-              </div>
-              <p>Use <strong>keyboard shortcuts</strong> for quick tagging</p>
-            </div>
-          </div>
+        <aside className="w-72 border-l border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <EditorHelpPanel
+            accent="blue"
+            steps={[
+              { badge: '1', body: <><strong>Select a POS tag</strong> from the left palette</> },
+              { badge: '2', body: <><strong>Click tokens</strong> in the text to apply the tag</> },
+              { badge: '3', body: <>Use <strong>keyboard shortcuts</strong> for quick tagging</> },
+            ]}
+            shortcuts={[
+              { keys: ['Tab', '→'], label: 'Next token' },
+              { keys: ['←'], label: 'Prev token' },
+              { keys: ['Del'], label: 'Clear tag' },
+              { keys: ['[', ']'], label: 'Previous / next document' },
+              { keys: ['⌘/Ctrl', '↵'], label: 'Mark complete & advance' },
+              { keys: ['Esc'], label: 'Cancel' },
+            ]}
+          />
 
-          <Separator className="my-6" />
-
-          <h3 className="font-bold text-slate-900 dark:text-white mb-4">Shortcuts</h3>
-          <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
-            <div className="flex justify-between">
-              <span>Next token</span>
-              <div className="flex gap-1">
-                <kbd className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">Tab</kbd>
-                <kbd className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">&rarr;</kbd>
-              </div>
-            </div>
-            <div className="flex justify-between">
-              <span>Prev token</span>
-              <div className="flex gap-1">
-                <kbd className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">&larr;</kbd>
-              </div>
-            </div>
-            <div className="flex justify-between">
-              <span>Clear tag</span>
-              <kbd className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">Del</kbd>
-            </div>
-            <div className="flex justify-between">
-              <span>Cancel</span>
-              <kbd className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">Esc</kbd>
-            </div>
-          </div>
-
-          <Separator className="my-6" />
-
+          <div className="p-4">
           <h3 className="font-bold text-slate-900 dark:text-white mb-4">Statistics</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
@@ -944,6 +949,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
                 );
               });
             })()}
+          </div>
           </div>
         </aside>
       </div>

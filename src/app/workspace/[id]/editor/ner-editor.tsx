@@ -657,9 +657,14 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
                 “{spanSurface(pendingRange.start, pendingRange.end)}” — pick a tag
               </Badge>
             )}
-            <Badge variant="secondary" className="text-sm">
-              {annotations.length} span{annotations.length === 1 ? '' : 's'}{currentUserId ? '' : ' total'}
-            </Badge>
+            <div className="hidden xl:flex items-center gap-2">
+              <Badge variant="secondary" className="text-sm">
+                {editorData.totalTokens} tokens
+              </Badge>
+              <Badge variant="secondary" className="text-sm">
+                {annotations.length} span{annotations.length === 1 ? '' : 's'}{currentUserId ? '' : ' total'}
+              </Badge>
+            </div>
             <Button
               variant="outline"
               size="sm"

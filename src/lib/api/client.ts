@@ -20,6 +20,19 @@ export interface ApiResponse<T> {
     timestamp?: string;
 }
 
+/**
+ * Keyset (cursor) pagination payload, carried as the `data` of an
+ * {@link ApiResponse} by high-volume list endpoints (mentions, clusters).
+ * Fetch the next page by sending `nextCursor` back as the `cursor` query
+ * param; `hasMore === false` (and `nextCursor === null`) ends the traversal.
+ */
+export interface CursorPage<T> {
+    items: T[];
+    nextCursor: string | null;
+    pageSize: number;
+    hasMore: boolean;
+}
+
 export interface ApiError {
     success: boolean;
     message: string;

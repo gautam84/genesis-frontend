@@ -698,6 +698,64 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
       </header>
 
       <div className="flex h-[calc(100vh-73px)]">
+        {/* Left bar: instructions */}
+        <aside className="w-64 border-r border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <h3 className="font-bold text-slate-900 dark:text-white mb-4">How to Annotate</h3>
+          <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
+            <div className="flex gap-3">
+              <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-bold text-indigo-600">1</span>
+              </div>
+              <p><strong>Click a token</strong> to anchor the span start</p>
+            </div>
+            <div className="flex gap-3">
+              <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-bold text-indigo-600">2</span>
+              </div>
+              <p><strong>Click another token</strong> to set the span end</p>
+            </div>
+            <div className="flex gap-3">
+              <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-bold text-indigo-600">3</span>
+              </div>
+              <p><strong>Pick a tag</strong> from the palette (click or press 1–9). Nested and overlapping spans are allowed</p>
+            </div>
+            <div className="flex gap-3">
+              <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                <span className="text-[10px] font-bold text-gray-600">ESC</span>
+              </div>
+              <p>Press <strong>ESC</strong> to cancel the current selection</p>
+            </div>
+          </div>
+
+          <Separator className="my-6" />
+
+          <h3 className="font-bold text-slate-900 dark:text-white mb-4">Keyboard Shortcuts</h3>
+          <div className="space-y-2 text-sm">
+            {[
+              { keys: ['1', '–', '9'], label: 'Label the pending span' },
+              { keys: ['Del'], label: 'Delete span under cursor' },
+              { keys: ['[', ']'], label: 'Previous / next document' },
+              { keys: ['⌘/Ctrl', '↵'], label: 'Mark complete & advance' },
+              { keys: ['Esc'], label: 'Cancel selection' },
+            ].map((s) => (
+              <div key={s.label} className="flex items-center justify-between gap-3">
+                <span className="text-slate-600 dark:text-slate-400">{s.label}</span>
+                <span className="flex items-center gap-1 flex-shrink-0">
+                  {s.keys.map((k) => (
+                    <kbd
+                      key={k}
+                      className="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-mono text-slate-700 dark:text-slate-300"
+                    >
+                      {k}
+                    </kbd>
+                  ))}
+                </span>
+              </div>
+            ))}
+          </div>
+        </aside>
+
         {/* Left pane: tag palette */}
         <aside className="w-72 border-r border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10">
@@ -758,53 +816,6 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
                 Cancel selection (Esc)
               </button>
             )}
-
-            {/* Collapsible help */}
-            <details className="mt-4 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
-              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                How to annotate
-              </summary>
-              <div className="px-3 pb-3 space-y-3 text-xs text-slate-600 dark:text-slate-400">
-                <div className="flex gap-2">
-                  <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-[10px] font-bold text-indigo-600">1</span>
-                  <p><strong>Click a token</strong> to anchor the span start.</p>
-                </div>
-                <div className="flex gap-2">
-                  <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-[10px] font-bold text-indigo-600">2</span>
-                  <p><strong>Click another token</strong> to set the span end.</p>
-                </div>
-                <div className="flex gap-2">
-                  <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-[10px] font-bold text-indigo-600">3</span>
-                  <p><strong>Pick a tag</strong> (click or press 1–9). Nested spans are allowed.</p>
-                </div>
-
-                <Separator className="my-1" />
-
-                <div className="space-y-1.5">
-                  {[
-                    { keys: ['1', '–', '9'], label: 'Label the pending span' },
-                    { keys: ['Del'], label: 'Delete span under cursor' },
-                    { keys: ['[', ']'], label: 'Previous / next document' },
-                    { keys: ['⌘/Ctrl', '↵'], label: 'Mark complete & advance' },
-                    { keys: ['Esc'], label: 'Cancel selection' },
-                  ].map((s) => (
-                    <div key={s.label} className="flex items-center justify-between gap-3">
-                      <span>{s.label}</span>
-                      <span className="flex items-center gap-1 flex-shrink-0">
-                        {s.keys.map((k) => (
-                          <kbd
-                            key={k}
-                            className="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-mono text-slate-700 dark:text-slate-300"
-                          >
-                            {k}
-                          </kbd>
-                        ))}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </details>
           </div>
         </aside>
 

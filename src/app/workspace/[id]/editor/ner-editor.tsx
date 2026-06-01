@@ -947,9 +947,6 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
                   <p className="text-sm text-slate-900 dark:text-white truncate" title={surface}>
                     {surface}
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    tokens {span.startTokenIndex}..{span.endTokenIndex}
-                  </p>
                 </div>
               );
             })}

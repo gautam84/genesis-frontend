@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -322,11 +322,16 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
     }
   };
 
-  // Advance selection to the next token
+  // Advance selection to the next token. With nothing selected, this anchors on
+  // the first token — the keyboard-only entry point into the document.
   const advanceToNextToken = useCallback(() => {
-    if (!selectedTokenId || !documentContent?.tokens) return;
+    const tokens = documentContent?.tokens;
+    if (!tokens || tokens.length === 0) return;
 
-    const tokens = documentContent.tokens;
+    if (!selectedTokenId) {
+      setSelectedTokenId(tokens[0].id);
+      return;
+    }
     const currentIdx = tokens.findIndex(t => t.id === selectedTokenId);
     if (currentIdx >= 0 && currentIdx < tokens.length - 1) {
       setSelectedTokenId(tokens[currentIdx + 1].id);
@@ -335,11 +340,15 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
     }
   }, [selectedTokenId, documentContent]);
 
-  // Move to previous token
+  // Move to previous token. With nothing selected, anchors on the last token.
   const moveToPrevToken = useCallback(() => {
-    if (!selectedTokenId || !documentContent?.tokens) return;
+    const tokens = documentContent?.tokens;
+    if (!tokens || tokens.length === 0) return;
 
-    const tokens = documentContent.tokens;
+    if (!selectedTokenId) {
+      setSelectedTokenId(tokens[tokens.length - 1].id);
+      return;
+    }
     const currentIdx = tokens.findIndex(t => t.id === selectedTokenId);
     if (currentIdx > 0) {
       setSelectedTokenId(tokens[currentIdx - 1].id);
@@ -348,7 +357,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
 
   // Get effective POS for a token: local optimistic write > current user's
   // annotation > most-recent annotation > legacy token.pos column.
-  const getTokenPos = (token: TokenDto): string | null => {
+  const getTokenPos = useCallback((token: TokenDto): string | null => {
     if (token.id in localPosMap) return localPosMap[token.id];
     const annotations = annotationsByToken[token.id];
     if (annotations && annotations.length > 0) {
@@ -360,7 +369,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
       return sorted[0].posTag;
     }
     return token.pos;
-  };
+  }, [localPosMap, annotationsByToken, currentUser]);
 
   // Annotations from OTHER annotators (not current user) for disagreement display.
   const getOtherAnnotations = (tokenId: string): PosAnnotation[] => {
@@ -421,6 +430,11 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
         toggleComplete();
         return;
       }
+
+      // Every shortcut below is a bare key — bail if a modifier is held so we
+      // don't hijack browser shortcuts that collide with single-letter tag keys
+      // (e.g. ⌘R/⌘P/⌘D would otherwise apply ADV/PROPN/DET and block reload).
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       if (e.key === 'Escape') {
         setSelectedTokenId(null);
@@ -501,6 +515,15 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [advanceToNextToken, moveToPrevToken, clearSelectedTokenPos, selectedTokenId, selectedPosTag, applyPosTag, availableTags, toggleComplete, loadDocumentContent, currentDocIndex]);
 
+  // Keep the keyboard-selected token in view as the selection moves through the
+  // document (so arrow/Tab navigation doesn't run off-screen).
+  useEffect(() => {
+    if (!selectedTokenId) return;
+    document
+      .querySelector(`[data-token-id="${selectedTokenId}"]`)
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [selectedTokenId]);
+
   const openAddTagDialog = () => {
     setNewTagName('');
     setNewTagDescription('');
@@ -536,16 +559,26 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
     await refreshTags();
   };
 
-  // Compute statistics
-  const getStats = () => {
-    if (!documentContent?.tokens) return { total: 0, tagged: 0, untagged: 0 };
-    const tokens = documentContent.tokens;
+  // Single pass over the document for both the header stats and the tag-
+  // distribution panel, memoized so it doesn't re-run on every keystroke
+  // (selection changes re-render but don't touch tags). Recomputes only when
+  // the document or any effective POS value changes (via getTokenPos's deps).
+  const { stats, tagCounts } = useMemo(() => {
+    const tokens = documentContent?.tokens ?? [];
+    const counts: Record<string, number> = {};
     let tagged = 0;
     for (const token of tokens) {
-      if (getTokenPos(token)) tagged++;
+      const pos = getTokenPos(token);
+      if (pos) {
+        tagged++;
+        counts[pos] = (counts[pos] || 0) + 1;
+      }
     }
-    return { total: tokens.length, tagged, untagged: tokens.length - tagged };
-  };
+    return {
+      stats: { total: tokens.length, tagged, untagged: tokens.length - tagged },
+      tagCounts: counts,
+    };
+  }, [documentContent, getTokenPos]);
 
   // Render tokens with POS annotations
   const renderTokenizedText = () => {
@@ -572,6 +605,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
             return (
               <span
                 key={token.id}
+                data-token-id={token.id}
                 className={`inline-flex flex-col items-center mx-0.5 mb-1 cursor-pointer rounded-lg px-1.5 py-1 transition-all ${
                   isSelected
                     ? 'ring-2 ring-[var(--primary)] ring-offset-1 bg-indigo-50 dark:bg-indigo-950/40 shadow-md'
@@ -670,8 +704,6 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
       </div>
     );
   }
-
-  const stats = getStats();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
@@ -916,13 +948,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
           <h3 className="font-bold text-slate-900 dark:text-white mb-4">Tag Distribution</h3>
           <div className="space-y-1.5 text-sm">
             {(() => {
-              if (!documentContent?.tokens) return null;
-              const counts: Record<string, number> = {};
-              for (const token of documentContent.tokens) {
-                const pos = getTokenPos(token);
-                if (pos) counts[pos] = (counts[pos] || 0) + 1;
-              }
-              const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+              const entries = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]);
               if (entries.length === 0) {
                 return <p className="text-xs text-slate-400">No tags assigned yet</p>;
               }

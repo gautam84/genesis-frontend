@@ -617,13 +617,14 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
     ? annotations.filter(a => a.annotatorId === currentUserId)
     : annotations;
 
-  // Surface text for a token range (forms joined), with an index fallback.
+  // Surface text for a token range (forms joined). Returns '' when the span's
+  // tokens haven't been paginated into the editor yet, so callers can decide how
+  // to render the not-yet-loaded case rather than leaking raw token indices.
   const spanSurface = (start: number, end: number) => {
-    const surface = (documentContent?.tokens || [])
+    return (documentContent?.tokens || [])
       .filter(t => t.globalIndex >= start && t.globalIndex <= end)
       .map(t => t.form)
       .join(' ');
-    return surface || `[${start}..${end}]`;
   };
 
   const completeCount = editorData.documents.filter(d => d.status === 'COMPLETE').length;
@@ -654,7 +655,7 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
           <div className="flex items-center gap-4">
             {pendingRange && (
               <Badge variant="default" className="text-white bg-indigo-600 animate-pulse max-w-[16rem] truncate">
-                “{spanSurface(pendingRange.start, pendingRange.end)}” — pick a tag
+                “{spanSurface(pendingRange.start, pendingRange.end) || 'selection'}” — pick a tag
               </Badge>
             )}
             <div className="hidden xl:flex items-center gap-2">
@@ -949,9 +950,15 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
                       Delete
                     </button>
                   </div>
-                  <p className="text-sm text-slate-900 dark:text-white truncate" title={surface}>
-                    {surface}
-                  </p>
+                  {surface ? (
+                    <p className="text-sm text-slate-900 dark:text-white truncate" title={surface}>
+                      {surface}
+                    </p>
+                  ) : (
+                    <p className="text-sm italic text-slate-400 dark:text-slate-500">
+                      Scroll to load…
+                    </p>
+                  )}
                 </div>
               );
             })}
@@ -1039,15 +1046,18 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
           <DialogHeader>
             <DialogTitle>Delete span?</DialogTitle>
             <DialogDescription>
-              {spanToDelete && (
-                <>
-                  This removes the{' '}
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    {getTagInfo(spanToDelete.label)?.label || spanToDelete.label}
-                  </span>{' '}
-                  span “{spanSurface(spanToDelete.startTokenIndex, spanToDelete.endTokenIndex)}”. This cannot be undone.
-                </>
-              )}
+              {spanToDelete && (() => {
+                const surface = spanSurface(spanToDelete.startTokenIndex, spanToDelete.endTokenIndex);
+                return (
+                  <>
+                    This removes the{' '}
+                    <span className="font-semibold text-slate-900 dark:text-white">
+                      {getTagInfo(spanToDelete.label)?.label || spanToDelete.label}
+                    </span>{' '}
+                    span{surface ? ` “${surface}”` : ''}. This cannot be undone.
+                  </>
+                );
+              })()}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

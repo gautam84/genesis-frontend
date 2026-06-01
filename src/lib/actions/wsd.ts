@@ -9,7 +9,9 @@ import type {
 import { SessionExpiredError } from '@/lib/errors';
 import {
   createSense,
+  deleteAnnotation,
   deleteSense,
+  getAnnotationsForDocument,
   getAnnotationsForToken,
   listSenses,
   updateSense,
@@ -104,5 +106,29 @@ export async function upsertAnnotationAction(
     return { ok: true, data };
   } catch (err) {
     return toError(err, 'Failed to tag token.');
+  }
+}
+
+export async function listAnnotationsForDocumentAction(
+  workspaceId: string,
+  documentId: string,
+): Promise<ActionResult<WsdAnnotation[]>> {
+  try {
+    const data = await getAnnotationsForDocument(workspaceId, documentId);
+    return { ok: true, data };
+  } catch (err) {
+    return toError(err, 'Failed to load document annotations.');
+  }
+}
+
+export async function deleteAnnotationAction(
+  workspaceId: string,
+  annotationId: string,
+): Promise<ActionResult<void>> {
+  try {
+    await deleteAnnotation(workspaceId, annotationId);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return toError(err, 'Failed to remove annotation.');
   }
 }

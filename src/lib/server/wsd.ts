@@ -29,6 +29,26 @@ export async function getAnnotationsForToken(
   return res.data;
 }
 
+export async function getAnnotationsForDocument(
+  workspaceId: string,
+  documentId: string,
+): Promise<WsdAnnotation[]> {
+  const res = await serverFetch<ApiResponse<WsdAnnotation[]>>(
+    `/api/workspaces/${workspaceId}/wsd/documents/${documentId}/annotations`,
+  );
+  return res.data;
+}
+
+export async function deleteAnnotation(
+  workspaceId: string,
+  annotationId: string,
+): Promise<void> {
+  await serverFetch<ApiResponse<void>>(
+    `/api/workspaces/${workspaceId}/wsd/annotations/${annotationId}`,
+    { method: 'DELETE' },
+  );
+}
+
 export async function upsertAnnotation(
   workspaceId: string,
   tokenId: string,

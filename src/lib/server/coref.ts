@@ -13,6 +13,20 @@ import { serverFetch } from './api';
 /** Page size when draining a cursor-paginated endpoint (backend caps at 500). */
 const DRAIN_PAGE_SIZE = 200;
 
+/**
+ * Normalise a list endpoint's payload into a {@link CursorPage}. Tolerates a
+ * backend that still returns a bare array (pre-cursor-pagination) so a
+ * frontend/backend version skew degrades gracefully instead of throwing on
+ * `data.items`. A nullish/garbage payload yields an empty terminal page.
+ */
+function asCursorPage<T>(data: CursorPage<T> | T[] | null | undefined): CursorPage<T> {
+  if (Array.isArray(data)) {
+    return { items: data, nextCursor: null, pageSize: data.length, hasMore: false };
+  }
+  if (data && Array.isArray(data.items)) return data;
+  return { items: [], nextCursor: null, pageSize: 0, hasMore: false };
+}
+
 // ==================== Mentions ====================
 
 /**
@@ -29,11 +43,13 @@ export async function getMentionsByWorkspace(
   do {
     const params = new URLSearchParams({ limit: String(DRAIN_PAGE_SIZE) });
     if (cursor) params.set('cursor', cursor);
-    const res = await serverFetch<ApiResponse<CursorPage<MentionDto>>>(
+    const res = await serverFetch<ApiResponse<CursorPage<MentionDto> | MentionDto[]>>(
       `/api/workspaces/${workspaceId}/mentions?${params.toString()}`,
     );
-    all.push(...res.data.items);
-    cursor = res.data.hasMore ? res.data.nextCursor : null;
+    const page = asCursorPage<MentionDto>(res.data);
+    all.push(...page.items);
+    const next = page.hasMore ? page.nextCursor : null;
+    cursor = next === cursor ? null : next; // guard against a non-advancing cursor
   } while (cursor);
   return all;
 }
@@ -78,11 +94,13 @@ export async function getClusters(workspaceId: string): Promise<ClusterDto[]> {
   do {
     const params = new URLSearchParams({ limit: String(DRAIN_PAGE_SIZE) });
     if (cursor) params.set('cursor', cursor);
-    const res = await serverFetch<ApiResponse<CursorPage<ClusterDto>>>(
+    const res = await serverFetch<ApiResponse<CursorPage<ClusterDto> | ClusterDto[]>>(
       `/api/workspaces/${workspaceId}/clusters?${params.toString()}`,
     );
-    all.push(...res.data.items);
-    cursor = res.data.hasMore ? res.data.nextCursor : null;
+    const page = asCursorPage<ClusterDto>(res.data);
+    all.push(...page.items);
+    const next = page.hasMore ? page.nextCursor : null;
+    cursor = next === cursor ? null : next; // guard against a non-advancing cursor
   } while (cursor);
   return all;
 }

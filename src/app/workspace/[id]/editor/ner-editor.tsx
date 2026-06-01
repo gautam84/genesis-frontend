@@ -857,7 +857,7 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
         {/* Right pane: how-to + spans for this document */}
         <aside className="w-80 border-l border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
           {/* How to annotate */}
-          <details open className="border-b border-slate-200 dark:border-slate-800">
+          <details  className="border-b border-slate-200 dark:border-slate-800">
             <summary className="cursor-pointer select-none p-4 text-lg font-bold text-slate-900 dark:text-white">
               How to Annotate
             </summary>

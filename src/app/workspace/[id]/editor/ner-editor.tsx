@@ -101,6 +101,12 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
   // Hovered span (for highlight + delete affordance)
   const [hoveredSpanId, setHoveredSpanId] = useState<string | null>(null);
 
+  // Span pending deletion (drives the styled confirm dialog)
+  const [spanToDelete, setSpanToDelete] = useState<NerAnnotation | null>(null);
+
+  // Quick filter over the tag palette (NER ships many tags)
+  const [tagFilter, setTagFilter] = useState('');
+
   // Effective tag set for this workspace
   const [availableTags, setAvailableTags] = useState<NerTag[]>(() =>
     UNIVERSAL_NER_TAGS.map(t => ({ ...t, builtin: true })));
@@ -201,8 +207,8 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
     }
   }, [workspaceId, workspaceName, containerRef, lastScrollRef]);
 
-  const loadDocumentContent = async (docIndex: number) => {
-    if (!editorData || docIndex >= editorData.documents.length) return;
+  const loadDocumentContent = useCallback(async (docIndex: number) => {
+    if (!editorData || docIndex < 0 || docIndex >= editorData.documents.length) return;
 
     const scrollPos = containerRef.current?.scrollTop || 0;
     // Session save is best-effort; ignore its result.
@@ -227,7 +233,7 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
 
     const annResult = await listNerAnnotationsAction(docId);
     setAnnotations(annResult.ok ? annResult.data : []);
-  };
+  }, [editorData, workspaceId, containerRef]);
 
   const pagination = usePaginatedDocument({
     workspaceId,
@@ -257,7 +263,7 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
   };
 
   // Commit pending range with chosen label
-  const commitSpan = async (tag: NerTag) => {
+  const commitSpan = useCallback(async (tag: NerTag) => {
     if (!pendingRange || !documentContent) return;
     const result = await createNerAnnotationAction({
       documentId: documentContent.documentId,
@@ -271,16 +277,59 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
       return;
     }
     setAnnotations(prev => [...prev, result.data]);
-    clearPending();
-  };
+    setAnchorIndex(null);
+    setPendingRange(null);
+  }, [pendingRange, documentContent]);
 
   const deleteSpan = async (id: string) => {
     const result = await deleteNerAnnotationAction(id);
     if (!result.ok) {
       console.error('Failed to delete span:', result.error);
+      toast.error(result.error);
       return;
     }
     setAnnotations(prev => prev.filter(a => a.id !== id));
+  };
+
+  // Confirm the pending deletion then close the dialog
+  const confirmDeleteSpan = async () => {
+    if (!spanToDelete) return;
+    await deleteSpan(spanToDelete.id);
+    setSpanToDelete(null);
+  };
+
+  // Mark the current document complete/annotating; on completion advance to the
+  // next document (or celebrate when the whole workspace is done). Mirrors COREF.
+  const toggleComplete = useCallback(async () => {
+    if (!editorData) return;
+    const doc = editorData.documents[currentDocIndex];
+    if (!doc) return;
+    const newStatus = doc.status === 'COMPLETE' ? 'ANNOTATING' : 'COMPLETE';
+    const result = await updateDocumentStatusAction(doc.id, newStatus);
+    if (!result.ok) {
+      console.error('Failed to update status:', result.error);
+      toast.error(result.error);
+      return;
+    }
+    const newDocs = [...editorData.documents];
+    newDocs[currentDocIndex] = { ...doc, status: newStatus };
+    setEditorData({ ...editorData, documents: newDocs });
+
+    if (newStatus === 'COMPLETE') {
+      if (currentDocIndex < editorData.documents.length - 1) {
+        loadDocumentContent(currentDocIndex + 1);
+      } else {
+        toast.success('All documents complete 🎉');
+      }
+    }
+  }, [editorData, currentDocIndex, loadDocumentContent]);
+
+  // Cross-highlight: clicking a span in the list scrolls its first token into view.
+  const revealSpanInText = (span: NerAnnotation) => {
+    setHoveredSpanId(span.id);
+    document
+      .querySelector(`[data-token-index="${span.startTokenIndex}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   // Build per-token layer map for nested span rendering. Longer spans are placed
@@ -321,17 +370,99 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
   const getTagInfo = (label: string): NerTag | undefined =>
     availableTags.find(t => t.tag === label);
 
-  // Keyboard: Esc cancels pending range
+  // Palette filtered by the quick-filter box. Digit hotkeys (1-9) map to the first
+  // nine entries of this list, so they stay in sync with what the user sees.
+  const filteredTags = (() => {
+    const q = tagFilter.trim().toLowerCase();
+    if (!q) return availableTags;
+    return availableTags.filter(
+      t => t.tag.toLowerCase().includes(q) || t.label.toLowerCase().includes(q),
+    );
+  })();
+
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // Let the delete dialog own the keyboard while it's open
+      if (spanToDelete) return;
+
+      // Ignore shortcuts while typing in a field (palette filter, tag dialog, …)
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable ||
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      ) {
+        return;
+      }
+
       if (e.key === 'Escape') {
         clearPending();
+        return;
+      }
+
+      // Mark complete & advance — Cmd/Ctrl+Enter
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        toggleComplete();
+        return;
+      }
+
+      // Remaining shortcuts are bare keys — skip if a modifier is held
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // Digit hotkeys: label the pending span with the Nth visible tag
+      if (pendingRange && /^[1-9]$/.test(e.key)) {
+        const tag = filteredTags[Number(e.key) - 1];
+        if (tag) {
+          e.preventDefault();
+          commitSpan(tag);
+        }
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (hoveredSpanId) {
+          const span = annotations.find(a => a.id === hoveredSpanId);
+          if (span) {
+            e.preventDefault();
+            setSpanToDelete(span);
+          }
+        }
+        return;
+      }
+
+      if (e.key === '[') {
+        e.preventDefault();
+        loadDocumentContent(currentDocIndex - 1);
+        return;
+      }
+      if (e.key === ']') {
+        e.preventDefault();
+        loadDocumentContent(currentDocIndex + 1);
+        return;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [
+    spanToDelete,
+    pendingRange,
+    filteredTags,
+    hoveredSpanId,
+    annotations,
+    commitSpan,
+    toggleComplete,
+    loadDocumentContent,
+    currentDocIndex,
+  ]);
+
+  // Keep the active document button visible in the scrollable strip
+  useEffect(() => {
+    document
+      .querySelector('[data-doc-active="true"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [currentDocIndex]);
 
   const openAddTagDialog = () => {
     setNewTagName('');
@@ -394,6 +525,7 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
             return (
               <span
                 key={token.id}
+                data-token-index={gIdx}
                 className={`inline-flex flex-col items-center mx-0.5 mb-1 cursor-pointer rounded-md px-1 py-0.5 transition-colors ${
                   isAnchor
                     ? 'ring-2 ring-[var(--primary)] ring-offset-1 bg-indigo-50 dark:bg-indigo-950/40'
@@ -428,7 +560,7 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
                           onMouseLeave={() => setHoveredSpanId(null)}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (confirm(`Delete ${span.label} span?`)) deleteSpan(span.id);
+                            setSpanToDelete(span);
                           }}
                           title={`${info?.label || span.label} — click to delete`}
                         />
@@ -485,6 +617,19 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
     ? annotations.filter(a => a.annotatorId === currentUserId)
     : annotations;
 
+  // Surface text for a token range (forms joined). Returns '' when the span's
+  // tokens haven't been paginated into the editor yet, so callers can decide how
+  // to render the not-yet-loaded case rather than leaking raw token indices.
+  const spanSurface = (start: number, end: number) => {
+    return (documentContent?.tokens || [])
+      .filter(t => t.globalIndex >= start && t.globalIndex <= end)
+      .map(t => t.form)
+      .join(' ');
+  };
+
+  const completeCount = editorData.documents.filter(d => d.status === 'COMPLETE').length;
+  const isCurrentComplete = editorData.documents[currentDocIndex]?.status === 'COMPLETE';
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       {/* Header */}
@@ -509,13 +654,18 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
 
           <div className="flex items-center gap-4">
             {pendingRange && (
-              <Badge variant="default" className="text-white bg-indigo-600 animate-pulse">
-                Span [{pendingRange.start}..{pendingRange.end}] — pick a tag
+              <Badge variant="default" className="text-white bg-indigo-600 animate-pulse max-w-[16rem] truncate">
+                “{spanSurface(pendingRange.start, pendingRange.end) || 'selection'}” — pick a tag
               </Badge>
             )}
-            <Badge variant="secondary" className="text-sm">
-              {annotations.length} span{annotations.length === 1 ? '' : 's'}{currentUserId ? '' : ' total'}
-            </Badge>
+            <div className="hidden xl:flex items-center gap-2">
+              <Badge variant="secondary" className="text-sm">
+                {editorData.totalTokens} tokens
+              </Badge>
+              <Badge variant="secondary" className="text-sm">
+                {annotations.length} span{annotations.length === 1 ? '' : 's'}{currentUserId ? '' : ' total'}
+              </Badge>
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -530,23 +680,13 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
               Back to Workspace
             </Button>
             <Button
-              variant={editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? 'default' : 'outline'}
+              variant={isCurrentComplete ? 'default' : 'outline'}
               size="sm"
-              className={editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}
-              onClick={async () => {
-                const doc = editorData.documents[currentDocIndex];
-                const newStatus = doc.status === 'COMPLETE' ? 'ANNOTATING' : 'COMPLETE';
-                const result = await updateDocumentStatusAction(doc.id, newStatus);
-                if (!result.ok) {
-                  console.error('Failed to update status:', result.error);
-                  return;
-                }
-                const newDocs = [...editorData.documents];
-                newDocs[currentDocIndex] = { ...doc, status: newStatus };
-                setEditorData({ ...editorData, documents: newDocs });
-              }}
+              className={isCurrentComplete ? 'bg-green-600 hover:bg-green-700 text-white' : ''}
+              onClick={toggleComplete}
+              title="Mark complete & advance (⌘/Ctrl+Enter)"
             >
-              {editorData.documents[currentDocIndex]?.status === 'COMPLETE' ? 'Completed' : 'Mark Complete'}
+              {isCurrentComplete ? 'Completed' : 'Mark Complete'}
             </Button>
             <Avatar className="cursor-pointer ring-2 ring-white dark:ring-slate-800">
               <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
@@ -563,12 +703,21 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">NER Tags</h2>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              {pendingRange ? 'Click a tag to label the selected span.' : 'Click tokens to select a span first.'}
+              {pendingRange ? 'Click a tag (or press 1–9) to label the span.' : 'Click tokens to select a span first.'}
             </p>
+            <Input
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              placeholder="Filter tags…"
+              className="mt-3 h-8 text-sm"
+            />
           </div>
 
           <div className="p-3 space-y-1">
-            {availableTags.map((tag) => (
+            {filteredTags.length === 0 && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 px-1 py-2">No tags match “{tagFilter}”.</p>
+            )}
+            {filteredTags.map((tag, idx) => (
               <button
                 key={tag.tag}
                 onClick={() => pendingRange ? commitSpan(tag) : undefined}
@@ -588,6 +737,11 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
                     {tag.tag}{tag.builtin === false ? ' · custom' : ''}
                   </span>
                 </span>
+                {idx < 9 && (
+                  <kbd className="shrink-0 rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                    {idx + 1}
+                  </kbd>
+                )}
               </button>
             ))}
             <button
@@ -614,34 +768,75 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
           className="flex-1 overflow-auto px-12 py-8"
         >
           <div className="max-w-5xl mx-auto">
-            <div className="mb-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                  {editorData.documents[currentDocIndex]?.name || 'Document'}
-                </h2>
-                <div className="flex items-center gap-2">
+            {/* Document switcher: scrollable strip + prev/next + progress */}
+            {editorData.documents.length > 0 && (
+              <div className="flex items-center gap-2 mb-6">
+                {editorData.documents.length > 1 && (
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    disabled={currentDocIndex === 0}
+                    className="px-2 flex-shrink-0"
+                    disabled={currentDocIndex <= 0}
                     onClick={() => loadDocumentContent(currentDocIndex - 1)}
+                    title="Previous document ( [ )"
                   >
-                    ← Previous
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
                   </Button>
-                  <span className="text-sm text-slate-500 dark:text-slate-400 px-2">
-                    {currentDocIndex + 1} / {editorData.documents.length}
-                  </span>
+                )}
+
+                <div className="flex gap-2 overflow-x-auto py-1 flex-1">
+                  {editorData.documents.map((doc, idx) => {
+                    const isComplete = doc.status === 'COMPLETE';
+                    const isActive = currentDocIndex === idx;
+                    return (
+                      <Button
+                        key={doc.id}
+                        data-doc-active={isActive}
+                        variant={isActive ? 'default' : 'outline'}
+                        size="sm"
+                        className="flex-shrink-0 gap-1.5"
+                        onClick={() => loadDocumentContent(idx)}
+                        title={isComplete ? `${doc.name} — complete` : doc.name}
+                      >
+                        <span
+                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            isComplete
+                              ? 'bg-green-500'
+                              : isActive
+                                ? 'bg-white/70'
+                                : 'bg-slate-300 dark:bg-slate-600'
+                          }`}
+                        />
+                        {doc.name}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                {editorData.documents.length > 1 && (
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
+                    className="px-2 flex-shrink-0"
                     disabled={currentDocIndex >= editorData.documents.length - 1}
                     onClick={() => loadDocumentContent(currentDocIndex + 1)}
+                    title="Next document ( ] )"
                   >
-                    Next →
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </Button>
-                </div>
+                )}
+
+                <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0 whitespace-nowrap ml-1">
+                  Doc {currentDocIndex + 1}/{editorData.documents.length}
+                  {' · '}
+                  {completeCount} complete
+                </span>
               </div>
-            </div>
+            )}
 
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
               <div className="text-slate-900 dark:text-white" style={{ lineHeight: '2.5' }}>
@@ -652,14 +847,77 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
             <EditorLoadMore {...pagination} />
 
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">
-              Click a token to anchor the span start, then click another to set the end. Pick a tag from the left.
-              Nested and overlapping spans are allowed. Hover any colored underline to highlight; click to delete.
+              Click a token to anchor the span start, then click another to set the end. Pick a tag from the
+              left (or press 1–9). Nested and overlapping spans are allowed. Click a span in the list to jump
+              to it; click any colored underline to delete.
             </p>
           </div>
         </main>
 
-        {/* Right pane: spans for this document */}
+        {/* Right pane: how-to + spans for this document */}
         <aside className="w-80 border-l border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          {/* How to annotate */}
+          <details  className="border-b border-slate-200 dark:border-slate-800">
+            <summary className="cursor-pointer select-none p-4 text-lg font-bold text-slate-900 dark:text-white">
+              How to Annotate
+            </summary>
+            <div className="px-4 pb-4">
+              <div className="space-y-3 text-sm text-slate-600 dark:text-slate-400">
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-indigo-600">1</span>
+                  </div>
+                  <p><strong>Click a token</strong> to anchor the span start</p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-indigo-600">2</span>
+                  </div>
+                  <p><strong>Click another token</strong> to set the span end</p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-indigo-600">3</span>
+                  </div>
+                  <p><strong>Pick a tag</strong> from the palette (click or press 1–9). Nested and overlapping spans are allowed</p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                    <span className="text-[10px] font-bold text-gray-600">ESC</span>
+                  </div>
+                  <p>Press <strong>ESC</strong> to cancel the current selection</p>
+                </div>
+              </div>
+
+              <Separator className="my-4" />
+
+              <h3 className="font-bold text-slate-900 dark:text-white mb-3">Keyboard Shortcuts</h3>
+              <div className="space-y-2 text-sm">
+                {[
+                  { keys: ['1', '–', '9'], label: 'Label the pending span' },
+                  { keys: ['Del'], label: 'Delete span under cursor' },
+                  { keys: ['[', ']'], label: 'Previous / next document' },
+                  { keys: ['⌘/Ctrl', '↵'], label: 'Mark complete & advance' },
+                  { keys: ['Esc'], label: 'Cancel selection' },
+                ].map((s) => (
+                  <div key={s.label} className="flex items-center justify-between gap-3">
+                    <span className="text-slate-600 dark:text-slate-400">{s.label}</span>
+                    <span className="flex items-center gap-1 flex-shrink-0">
+                      {s.keys.map((k) => (
+                        <kbd
+                          key={k}
+                          className="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-mono text-slate-700 dark:text-slate-300"
+                        >
+                          {k}
+                        </kbd>
+                      ))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </details>
+
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">
               {currentUserId ? 'Your Spans' : 'All Spans'}
@@ -670,42 +928,52 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
           </div>
           <div className="p-3 space-y-2">
             {myAnnotations.length === 0 && (
-              <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">
-                No spans yet. Click two tokens and pick a tag to create one.
-              </p>
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 11h6m-6 4h10M5 5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5z" />
+                  </svg>
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400">No spans yet</p>
+                <p className="text-xs text-slate-400 mt-2">Click two tokens and pick a tag to create one</p>
+              </div>
             )}
             {myAnnotations.map((span) => {
               const info = getTagInfo(span.label);
               const color = info?.color || '#9ca3af';
-              const tokens = documentContent?.tokens || [];
-              const surface = tokens
-                .filter(t => t.globalIndex >= span.startTokenIndex && t.globalIndex <= span.endTokenIndex)
-                .map(t => t.form)
-                .join(' ');
+              const surface = spanSurface(span.startTokenIndex, span.endTokenIndex);
               return (
                 <div
                   key={span.id}
-                  className="rounded-md border border-slate-200 dark:border-slate-700 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                  className={`rounded-md border p-2 cursor-pointer transition-colors ${
+                    hoveredSpanId === span.id
+                      ? 'border-amber-300 bg-amber-50 dark:border-amber-700/60 dark:bg-amber-950/30'
+                      : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                  }`}
                   onMouseEnter={() => setHoveredSpanId(span.id)}
                   onMouseLeave={() => setHoveredSpanId(null)}
+                  onClick={() => revealSpanInText(span)}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <Badge style={{ backgroundColor: color }} className="text-white text-xs">
                       {info?.label || span.label}
                     </Badge>
                     <button
-                      onClick={() => { if (confirm(`Delete ${span.label} span?`)) deleteSpan(span.id); }}
+                      onClick={(e) => { e.stopPropagation(); setSpanToDelete(span); }}
                       className="text-xs text-red-600 hover:text-red-700"
                     >
                       Delete
                     </button>
                   </div>
-                  <p className="text-sm text-slate-900 dark:text-white truncate" title={surface}>
-                    {surface || `[${span.startTokenIndex}..${span.endTokenIndex}]`}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    tokens {span.startTokenIndex}..{span.endTokenIndex}
-                  </p>
+                  {surface ? (
+                    <p className="text-sm text-slate-900 dark:text-white truncate" title={surface}>
+                      {surface}
+                    </p>
+                  ) : (
+                    <p className="text-sm italic text-slate-400 dark:text-slate-500">
+                      Scroll to load…
+                    </p>
+                  )}
                 </div>
               );
             })}
@@ -782,6 +1050,35 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
             </Button>
             <Button onClick={handleCreateTag} disabled={addingTag}>
               {addingTag ? 'Creating…' : 'Create tag'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete span confirmation */}
+      <Dialog open={spanToDelete !== null} onOpenChange={(open) => { if (!open) setSpanToDelete(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete span?</DialogTitle>
+            <DialogDescription>
+              {spanToDelete && (() => {
+                const surface = spanSurface(spanToDelete.startTokenIndex, spanToDelete.endTokenIndex);
+                return (
+                  <>
+                    This removes the{' '}
+                    <span className="font-semibold text-slate-900 dark:text-white">
+                      {getTagInfo(spanToDelete.label)?.label || spanToDelete.label}
+                    </span>{' '}
+                    span{surface ? ` “${surface}”` : ''}. This cannot be undone.
+                  </>
+                );
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSpanToDelete(null)}>Cancel</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={confirmDeleteSpan}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

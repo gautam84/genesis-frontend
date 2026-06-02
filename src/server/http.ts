@@ -9,6 +9,7 @@ import {
   REFRESH_MAX_AGE_SECONDS,
   cookieOptions,
 } from '@/server/cookies';
+import { API_BASE_URL } from '@/config/env';
 
 /**
  * Server-only Spring API client. Reads the access token from HttpOnly
@@ -23,8 +24,6 @@ import {
  * `SessionExpiredError` and the caller redirects to
  * `/api/auth/end-session`, which clears cookies and routes to /login.
  */
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 // Re-exported for back-compat with importers of `@/lib/server/api`.
 export { ACCESS_COOKIE, REFRESH_COOKIE };

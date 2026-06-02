@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
-
-const ACCESS_COOKIE = 'genesis_access_token';
-const REFRESH_COOKIE = 'genesis_refresh_token';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-const REFRESH_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+import { API_BASE_URL } from '@/config/env';
+import {
+  ACCESS_COOKIE,
+  REFRESH_COOKIE,
+  REFRESH_MAX_AGE_SECONDS,
+  cookieOptions,
+} from '@/server/cookies';
 
 // Routes that require an authenticated session. Anything not matching here
 // (e.g. /signup verification flows) passes through; AuthGuard / page-level
@@ -18,16 +19,6 @@ const GUEST_ONLY_PREFIXES = ['/login', '/signup'];
 
 const matches = (path: string, prefixes: string[]) =>
   prefixes.some((p) => path === p || path.startsWith(`${p}/`));
-
-function cookieOptions(maxAge: number) {
-  return {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
-    path: '/',
-    maxAge,
-  };
-}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

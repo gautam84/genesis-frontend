@@ -5,8 +5,10 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { DocumentContentResponse } from '@/lib/api';
 import { getDocumentContentAction } from '@/lib/actions/editor';
 
-/** Sentences/tokens fetched per page of document content across all editors. */
-export const EDITOR_PAGE_SIZE = 50;
+// Canonical value lives in `@/lib/constants`; imported for local use and
+// re-exported so existing `@/hooks/usePaginatedDocument` importers resolve it unchanged.
+import { EDITOR_PAGE_SIZE } from '@/lib/constants';
+export { EDITOR_PAGE_SIZE };
 
 interface UsePaginatedDocumentArgs {
   workspaceId: string;

@@ -1,7 +1,6 @@
 'use server';
 
-import type { ActionResult } from '@/server/contracts/common';
-import { SessionExpiredError } from '@/server/errors';
+import { type ActionResult, toActionError } from '@/server/contracts/common';
 import type {
   CreateWsdSenseRequest,
   WsdAnnotation,
@@ -18,16 +17,6 @@ import {
   upsertAnnotation,
 } from './wsd.gateway';
 
-function toError(
-  err: unknown,
-  fallback: string,
-): { ok: false; error: string } {
-  if (err instanceof SessionExpiredError) {
-    return { ok: false, error: 'Session expired. Please log in again.' };
-  }
-  return { ok: false, error: err instanceof Error ? err.message : fallback };
-}
-
 export async function createSenseAction(
   workspaceId: string,
   request: CreateWsdSenseRequest,
@@ -35,7 +24,7 @@ export async function createSenseAction(
   try {
     const sense = await createSense(workspaceId, request);    return { ok: true, data: sense };
   } catch (err) {
-    return toError(err, 'Failed to create sense. Admin role is required.');
+    return toActionError(err, 'Failed to create sense. Admin role is required.');
   }
 }
 
@@ -47,7 +36,7 @@ export async function updateSenseAction(
   try {
     const sense = await updateSense(workspaceId, senseId, request);    return { ok: true, data: sense };
   } catch (err) {
-    return toError(err, 'Failed to update sense.');
+    return toActionError(err, 'Failed to update sense.');
   }
 }
 
@@ -58,7 +47,7 @@ export async function deleteSenseAction(
   try {
     await deleteSense(workspaceId, senseId);    return { ok: true, data: undefined };
   } catch (err) {
-    return toError(err, 'Failed to delete sense.');
+    return toActionError(err, 'Failed to delete sense.');
   }
 }
 
@@ -70,7 +59,7 @@ export async function listSensesAction(
     const data = await listSenses(workspaceId, word);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to load senses.');
+    return toActionError(err, 'Failed to load senses.');
   }
 }
 
@@ -82,7 +71,7 @@ export async function getAnnotationsForTokenAction(
     const data = await getAnnotationsForToken(workspaceId, tokenId);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to load token annotations.');
+    return toActionError(err, 'Failed to load token annotations.');
   }
 }
 
@@ -95,7 +84,7 @@ export async function upsertAnnotationAction(
     const data = await upsertAnnotation(workspaceId, tokenId, senseId);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to tag token.');
+    return toActionError(err, 'Failed to tag token.');
   }
 }
 
@@ -107,7 +96,7 @@ export async function listAnnotationsForDocumentAction(
     const data = await getAnnotationsForDocument(workspaceId, documentId);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to load document annotations.');
+    return toActionError(err, 'Failed to load document annotations.');
   }
 }
 
@@ -119,6 +108,6 @@ export async function deleteAnnotationAction(
     await deleteAnnotation(workspaceId, annotationId);
     return { ok: true, data: undefined };
   } catch (err) {
-    return toError(err, 'Failed to remove annotation.');
+    return toActionError(err, 'Failed to remove annotation.');
   }
 }

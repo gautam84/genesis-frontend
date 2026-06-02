@@ -1,7 +1,6 @@
 'use server';
 
-import type { ActionResult } from '@/server/contracts/common';
-import { SessionExpiredError } from '@/server/errors';
+import { type ActionResult, toActionError } from '@/server/contracts/common';
 import type {
   DocumentContentResponse,
   EditorDocumentInfo,
@@ -15,13 +14,6 @@ import {
   saveSession,
 } from './editor.gateway';
 
-function toError(err: unknown, fallback: string): { ok: false; error: string } {
-  if (err instanceof SessionExpiredError) {
-    return { ok: false, error: 'Session expired. Please log in again.' };
-  }
-  return { ok: false, error: err instanceof Error ? err.message : fallback };
-}
-
 export async function getEditorDocumentsAction(
   workspaceId: string,
 ): Promise<ActionResult<EditorDocumentInfo[]>> {
@@ -29,7 +21,7 @@ export async function getEditorDocumentsAction(
     const data = await getWorkspaceDocuments(workspaceId);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to load documents.');
+    return toActionError(err, 'Failed to load documents.');
   }
 }
 
@@ -43,7 +35,7 @@ export async function getDocumentContentAction(
     const data = await getDocumentContent(workspaceId, documentId, page, size);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to load document content.');
+    return toActionError(err, 'Failed to load document content.');
   }
 }
 
@@ -54,7 +46,7 @@ export async function getEditorSessionAction(
     const data = await getSession(workspaceId);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to load editor session.');
+    return toActionError(err, 'Failed to load editor session.');
   }
 }
 
@@ -65,6 +57,6 @@ export async function saveEditorSessionAction(
     const data = await saveSession(request);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to save editor session.');
+    return toActionError(err, 'Failed to save editor session.');
   }
 }

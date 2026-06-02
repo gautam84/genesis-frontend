@@ -1,7 +1,6 @@
 'use server';
 
-import type { ActionResult } from '@/server/contracts/common';
-import { SessionExpiredError } from '@/server/errors';
+import { type ActionResult, toActionError } from '@/server/contracts/common';
 import type { Notification } from './notifications.contracts';
 import {
   deleteNotification,
@@ -10,19 +9,12 @@ import {
   markNotificationAsRead,
 } from './notifications.gateway';
 
-function toError(err: unknown, fallback: string): { ok: false; error: string } {
-  if (err instanceof SessionExpiredError) {
-    return { ok: false, error: 'Session expired. Please log in again.' };
-  }
-  return { ok: false, error: err instanceof Error ? err.message : fallback };
-}
-
 export async function listNotificationsAction(): Promise<ActionResult<Notification[]>> {
   try {
     const data = await listNotifications();
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to load notifications.');
+    return toActionError(err, 'Failed to load notifications.');
   }
 }
 
@@ -33,7 +25,7 @@ export async function markNotificationAsReadAction(
     await markNotificationAsRead(id);
     return { ok: true, data: undefined };
   } catch (err) {
-    return toError(err, 'Failed to mark notification as read.');
+    return toActionError(err, 'Failed to mark notification as read.');
   }
 }
 
@@ -42,7 +34,7 @@ export async function markAllNotificationsAsReadAction(): Promise<ActionResult<v
     await markAllNotificationsAsRead();
     return { ok: true, data: undefined };
   } catch (err) {
-    return toError(err, 'Failed to mark all as read.');
+    return toActionError(err, 'Failed to mark all as read.');
   }
 }
 
@@ -51,6 +43,6 @@ export async function deleteNotificationAction(id: string): Promise<ActionResult
     await deleteNotification(id);
     return { ok: true, data: undefined };
   } catch (err) {
-    return toError(err, 'Failed to delete notification.');
+    return toActionError(err, 'Failed to delete notification.');
   }
 }

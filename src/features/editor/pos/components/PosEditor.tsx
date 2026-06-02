@@ -28,7 +28,6 @@ import type {
 import {
   UNIVERSAL_POS_TAGS,
   type PosTag,
-  type PosTagDefinition,
   type PosTagScope,
   type PosAnnotation,
 } from '@/features/editor/pos/pos.contracts';
@@ -51,7 +50,7 @@ import { EditorLoadMore } from '@/features/editor/core/components/EditorLoadMore
 import { DocumentSwitcher } from '@/features/editor/core/components/DocumentSwitcher';
 import { EditorHelpPanel } from '@/features/editor/core/components/EditorHelpPanel';
 import { FullScreenLoader } from '@/components/Spinner';
-import { CUSTOM_TAG_PALETTE } from '@/lib/constants';
+import { mergeTagDefinitions } from '@/features/editor/core/editor.utils';
 import { toast } from 'sonner';
 
 // Group flat annotations into Record<tokenId, PosAnnotation[]>.
@@ -62,25 +61,6 @@ function groupAnnotationsByToken(annotations: PosAnnotation[]): Record<string, P
     out[a.tokenId].push(a);
   }
   return out;
-}
-
-function mergeTagDefinitions(defs: PosTagDefinition[]): PosTag[] {
-  const builtinByTag = new Map(UNIVERSAL_POS_TAGS.map(t => [t.tag, t]));
-  const merged: PosTag[] = UNIVERSAL_POS_TAGS.map(t => ({ ...t, builtin: true }));
-  let customIdx = 0;
-  for (const d of defs) {
-    if (d.builtin || builtinByTag.has(d.tag)) continue;
-    merged.push({
-      tag: d.tag,
-      label: d.tag,
-      description: d.description ?? '',
-      color: CUSTOM_TAG_PALETTE[customIdx++ % CUSTOM_TAG_PALETTE.length],
-      builtin: false,
-      definitionId: d.id,
-      scope: d.scope,
-    });
-  }
-  return merged;
 }
 
 interface PosEditorProps {
@@ -124,7 +104,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
   const refreshTags = useCallback(async () => {
     const result = await listPosTagsAction(workspaceId);
     if (result.ok) {
-      setAvailableTags(mergeTagDefinitions(result.data || []));
+      setAvailableTags(mergeTagDefinitions(UNIVERSAL_POS_TAGS, result.data || []));
     }
     // On failure, fall back to universal tags — already initialised in state.
   }, [workspaceId]);

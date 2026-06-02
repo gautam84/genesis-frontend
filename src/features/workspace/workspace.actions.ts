@@ -1,8 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { ActionResult } from '@/server/contracts/common';
-import { SessionExpiredError } from '@/server/errors';
+import { type ActionResult, toActionError } from '@/server/contracts/common';
 import type {
   AddMemberRequest,
   CreateWorkspaceRequest,
@@ -19,13 +18,6 @@ import {
   updateWorkspace,
 } from './workspace.gateway';
 
-function toError(err: unknown, fallback: string): { ok: false; error: string } {
-  if (err instanceof SessionExpiredError) {
-    return { ok: false, error: 'Session expired. Please log in again.' };
-  }
-  return { ok: false, error: err instanceof Error ? err.message : fallback };
-}
-
 export async function createWorkspaceAction(
   request: CreateWorkspaceRequest,
 ): Promise<ActionResult<WorkspaceResponse>> {
@@ -34,7 +26,7 @@ export async function createWorkspaceAction(
     revalidatePath('/home');
     return { ok: true, data: workspace };
   } catch (err) {
-    return toError(err, 'Failed to create workspace');
+    return toActionError(err, 'Failed to create workspace');
   }
 }
 
@@ -47,7 +39,7 @@ export async function updateWorkspaceAction(
     revalidatePath(`/workspace/${id}`);
     return { ok: true, data: workspace };
   } catch (err) {
-    return toError(err, 'Failed to update workspace');
+    return toActionError(err, 'Failed to update workspace');
   }
 }
 
@@ -57,7 +49,7 @@ export async function deleteWorkspaceAction(id: string): Promise<ActionResult<vo
     revalidatePath('/home');
     return { ok: true, data: undefined };
   } catch (err) {
-    return toError(err, 'Failed to delete workspace');
+    return toActionError(err, 'Failed to delete workspace');
   }
 }
 
@@ -70,7 +62,7 @@ export async function addMemberAction(
     revalidatePath(`/workspace/${id}`);
     return { ok: true, data: undefined };
   } catch (err) {
-    return toError(err, 'Failed to add member');
+    return toActionError(err, 'Failed to add member');
   }
 }
 
@@ -83,7 +75,7 @@ export async function removeMemberAction(
     revalidatePath(`/workspace/${id}`);
     return { ok: true, data: undefined };
   } catch (err) {
-    return toError(err, 'Failed to remove member');
+    return toActionError(err, 'Failed to remove member');
   }
 }
 
@@ -97,6 +89,6 @@ export async function updateMemberRoleAction(
     revalidatePath(`/workspace/${id}`);
     return { ok: true, data: undefined };
   } catch (err) {
-    return toError(err, 'Failed to update role');
+    return toActionError(err, 'Failed to update role');
   }
 }

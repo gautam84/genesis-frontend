@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/features/auth/auth.provider';
 import {
   type WorkspaceEditorResponse,
   type DocumentContentResponse,

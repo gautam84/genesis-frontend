@@ -6,7 +6,7 @@
  */
 
 export * from './client';
-export * from './auth';
+export * from '@/features/auth/auth.contracts';
 export * from './workspace';
 export * from '@/features/document/document.contracts';
 export * from './tokenization';

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRequireAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/features/auth/auth.provider';
 import { FullScreenLoader } from '@/components/Spinner';
 
 interface AuthGuardProps {

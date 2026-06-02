@@ -1,8 +1,8 @@
 'use client';
 
 import { Toaster } from 'sonner';
-import { AuthProvider } from '@/lib/auth';
-import { NotificationProvider } from '@/lib/notifications';
+import { AuthProvider } from '@/features/auth/auth.provider';
+import { NotificationProvider } from '@/features/notifications/notifications.provider';
 
 export function Providers({ children }: { children: React.ReactNode }) {
     return (

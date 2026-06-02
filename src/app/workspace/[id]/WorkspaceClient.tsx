@@ -36,7 +36,7 @@ import {
 import {
   deleteDocumentAction,
   uploadDocumentAction,
-} from '@/lib/actions/document';
+} from '@/features/document/document.actions';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
 import { Sidebar, SidebarItem } from './_components/Sidebar';
 import { DocumentGrid, DocumentFilter } from './_components/DocumentGrid';

@@ -1,7 +1,8 @@
 import 'server-only';
 
-import { ApiResponse, DocumentResponse } from '@/lib/api';
-import { serverFetch } from './api';
+import { ApiResponse } from '@/server/contracts/common';
+import { serverFetch } from '@/server/http';
+import { DocumentResponse } from './document.contracts';
 
 export async function listDocuments(workspaceId: string): Promise<DocumentResponse[]> {
   const res = await serverFetch<ApiResponse<DocumentResponse[]>>(

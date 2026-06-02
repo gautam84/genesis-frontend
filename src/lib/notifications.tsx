@@ -3,14 +3,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Client, IMessage } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
-import { Notification } from './api';
+import { Notification } from '@/features/notifications/notifications.contracts';
 import { getAccessTokenAction } from './actions/auth';
 import {
   deleteNotificationAction,
   listNotificationsAction,
   markAllNotificationsAsReadAction,
   markNotificationAsReadAction,
-} from './actions/notifications';
+} from '@/features/notifications/notifications.actions';
 import { useAuth } from './auth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';

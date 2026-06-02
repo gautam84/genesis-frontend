@@ -42,7 +42,7 @@ import {
   listNerAnnotationsAction,
   listNerTagsAction,
 } from '@/lib/actions/ner';
-import { updateDocumentStatusAction } from '@/lib/actions/document';
+import { updateDocumentStatusAction } from '@/features/document/document.actions';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/hooks/usePaginatedDocument';
 import { EditorLoadMore } from '@/components/editor/EditorLoadMore';

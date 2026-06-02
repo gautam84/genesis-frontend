@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './client';
+import { API_BASE_URL } from '@/config/env';
 
 export type RecommendationType =
     | 'UNFINISHED_MENTION'

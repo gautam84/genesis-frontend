@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { SessionExpiredError } from '@/lib/errors';
-import { listDocuments } from '@/lib/server/document';
+import { listDocuments } from '@/features/document/document.gateway';
 import { getWorkspaceById, listMembers } from '@/lib/server/workspace';
 import { WorkspaceClient } from './WorkspaceClient';
 

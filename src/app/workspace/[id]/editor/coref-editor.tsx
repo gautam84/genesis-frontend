@@ -40,7 +40,7 @@ import {
   getMentionsByWorkspaceAction,
   mergeClustersAction,
 } from '@/lib/actions/coref';
-import { updateDocumentStatusAction } from '@/lib/actions/document';
+import { updateDocumentStatusAction } from '@/features/document/document.actions';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { DocumentSwitcher } from '@/components/editor/DocumentSwitcher';
 import { EditorHelpPanel } from '@/components/editor/EditorHelpPanel';

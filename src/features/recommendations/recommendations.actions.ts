@@ -1,16 +1,13 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { ShareTokenResponse } from '@/lib/api';
-import { SessionExpiredError } from '@/lib/errors';
+import type { ActionResult } from '@/server/contracts/common';
+import { SessionExpiredError } from '@/server/errors';
+import type { ShareTokenResponse } from './recommendations.contracts';
 import {
   dismissRecommendation,
   issueShareToken,
-} from '@/lib/server/recommendations';
-
-type ActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+} from './recommendations.gateway';
 
 export async function dismissRecommendationAction(
   workspaceId: string,

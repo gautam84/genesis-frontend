@@ -1,4 +1,45 @@
 import { CUSTOM_TAG_PALETTE } from '@/lib/constants';
+import type {
+  EditorDocumentInfo,
+  EditorSessionResponse,
+  WorkspaceEditorResponse,
+} from './editor.contracts';
+
+/**
+ * Assemble the `WorkspaceEditorResponse` view model every editor builds on mount
+ * from the loaded documents + session. Identical across COREF/NER/POS/WSD apart
+ * from `annotationType`.
+ */
+export function buildEditorData(
+  workspaceId: string,
+  workspaceName: string,
+  annotationType: string,
+  documents: EditorDocumentInfo[],
+  session: EditorSessionResponse | null,
+): WorkspaceEditorResponse {
+  return {
+    workspaceId,
+    workspaceName,
+    annotationType,
+    documents,
+    session,
+    totalDocuments: documents.length,
+    totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
+    totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
+  };
+}
+
+/** Group a flat annotation list by `tokenId`. Shared by the POS and WSD editors. */
+export function groupAnnotationsByToken<T extends { tokenId: string }>(
+  annotations: T[],
+): Record<string, T[]> {
+  const out: Record<string, T[]> = {};
+  for (const a of annotations) {
+    if (!out[a.tokenId]) out[a.tokenId] = [];
+    out[a.tokenId].push(a);
+  }
+  return out;
+}
 
 /** Minimal shape shared by the NER/POS tag tables (`NerTag` / `PosTag`). */
 interface WorkspaceTag {

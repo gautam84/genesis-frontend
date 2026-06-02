@@ -51,18 +51,8 @@ import { DocumentSwitcher } from '@/features/editor/core/components/DocumentSwit
 import { EditorHelpPanel } from '@/features/editor/core/components/EditorHelpPanel';
 import { DisagreementDots } from '@/features/editor/core/components/DisagreementDots';
 import { FullScreenLoader } from '@/components/Spinner';
-import { mergeTagDefinitions } from '@/features/editor/core/editor.utils';
+import { buildEditorData, groupAnnotationsByToken, mergeTagDefinitions } from '@/features/editor/core/editor.utils';
 import { toast } from 'sonner';
-
-// Group flat annotations into Record<tokenId, PosAnnotation[]>.
-function groupAnnotationsByToken(annotations: PosAnnotation[]): Record<string, PosAnnotation[]> {
-  const out: Record<string, PosAnnotation[]> = {};
-  for (const a of annotations) {
-    if (!out[a.tokenId]) out[a.tokenId] = [];
-    out[a.tokenId].push(a);
-  }
-  return out;
-}
 
 interface PosEditorProps {
   workspaceId: string;
@@ -147,16 +137,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
         }
       }
 
-      setEditorData({
-        workspaceId,
-        workspaceName,
-        annotationType: 'POS',
-        documents,
-        session: savedSession,
-        totalDocuments: documents.length,
-        totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
-        totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
-      });
+      setEditorData(buildEditorData(workspaceId, workspaceName, 'POS', documents, savedSession));
 
       if (documents.length > 0) {
         const doc = documents[initialDocIndex];

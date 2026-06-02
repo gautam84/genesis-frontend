@@ -37,17 +37,8 @@ import { EditorHelpPanel } from '@/features/editor/core/components/EditorHelpPan
 import { DisagreementDots } from '@/features/editor/core/components/DisagreementDots';
 import { WsdSenseInventory } from '@/features/editor/wsd/components/WsdSenseInventory';
 import { FullScreenLoader } from '@/components/Spinner';
+import { buildEditorData, groupAnnotationsByToken } from '@/features/editor/core/editor.utils';
 import { toast } from 'sonner';
-
-// Group flat annotations into Record<tokenId, WsdAnnotation[]>.
-function groupAnnotationsByToken(annotations: WsdAnnotation[]): Record<string, WsdAnnotation[]> {
-  const out: Record<string, WsdAnnotation[]> = {};
-  for (const a of annotations) {
-    if (!out[a.tokenId]) out[a.tokenId] = [];
-    out[a.tokenId].push(a);
-  }
-  return out;
-}
 
 interface WsdEditorProps {
   workspaceId: string;
@@ -111,16 +102,7 @@ export default function WsdEditor({ workspaceId, workspaceName }: WsdEditorProps
       }
 
       if (cancelled) return;
-      setEditorData({
-        workspaceId,
-        workspaceName,
-        annotationType: 'WSD',
-        documents,
-        session: savedSession,
-        totalDocuments: documents.length,
-        totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
-        totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
-      });
+      setEditorData(buildEditorData(workspaceId, workspaceName, 'WSD', documents, savedSession));
 
       if (documents.length > 0) {
         const doc = documents[initialDocIndex];

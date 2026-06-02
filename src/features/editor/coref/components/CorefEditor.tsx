@@ -44,6 +44,7 @@ import { useEditorSession } from '@/features/editor/core/hooks/useEditorSession'
 import { DocumentSwitcher } from '@/features/editor/core/components/DocumentSwitcher';
 import { EditorHelpPanel } from '@/features/editor/core/components/EditorHelpPanel';
 import { FullScreenLoader } from '@/components/Spinner';
+import { buildEditorData } from '@/features/editor/core/editor.utils';
 import { CLUSTER_COLORS, EDITOR_PAGE_SIZE as PAGE_SIZE } from '@/lib/constants';
 import { toast } from 'sonner';
 
@@ -138,16 +139,7 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
         }
       }
 
-      setEditorData({
-        workspaceId,
-        workspaceName,
-        annotationType: 'COREF',
-        documents,
-        session: savedSession,
-        totalDocuments: documents.length,
-        totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
-        totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
-      });
+      setEditorData(buildEditorData(workspaceId, workspaceName, 'COREF', documents, savedSession));
 
       if (documents.length > 0) {
         const docIndex = initialDocIndex;

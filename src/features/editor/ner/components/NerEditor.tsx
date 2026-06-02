@@ -27,7 +27,6 @@ import type {
 import {
   UNIVERSAL_NER_TAGS,
   type NerTag,
-  type NerTagDefinition,
   type NerTagScope,
   type NerAnnotation,
 } from '@/features/editor/ner/ner.contracts';
@@ -51,27 +50,8 @@ import { EditorLoadMore } from '@/features/editor/core/components/EditorLoadMore
 import { DocumentSwitcher } from '@/features/editor/core/components/DocumentSwitcher';
 import { EditorHelpPanel } from '@/features/editor/core/components/EditorHelpPanel';
 import { FullScreenLoader } from '@/components/Spinner';
-import { CUSTOM_TAG_PALETTE } from '@/lib/constants';
+import { mergeTagDefinitions } from '@/features/editor/core/editor.utils';
 import { toast } from 'sonner';
-
-function mergeTagDefinitions(defs: NerTagDefinition[]): NerTag[] {
-  const builtinByTag = new Map(UNIVERSAL_NER_TAGS.map(t => [t.tag, t]));
-  const merged: NerTag[] = UNIVERSAL_NER_TAGS.map(t => ({ ...t, builtin: true }));
-  let customIdx = 0;
-  for (const d of defs) {
-    if (d.builtin || builtinByTag.has(d.tag)) continue;
-    merged.push({
-      tag: d.tag,
-      label: d.tag,
-      description: d.description ?? '',
-      color: CUSTOM_TAG_PALETTE[customIdx++ % CUSTOM_TAG_PALETTE.length],
-      builtin: false,
-      definitionId: d.id,
-      scope: d.scope,
-    });
-  }
-  return merged;
-}
 
 interface NerEditorProps {
   workspaceId: string;
@@ -122,7 +102,7 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
   const refreshTags = useCallback(async () => {
     const result = await listNerTagsAction(workspaceId);
     if (result.ok) {
-      setAvailableTags(mergeTagDefinitions(result.data || []));
+      setAvailableTags(mergeTagDefinitions(UNIVERSAL_NER_TAGS, result.data || []));
     }
     // On failure, fall back to universal tags — already initialised in state.
   }, [workspaceId]);

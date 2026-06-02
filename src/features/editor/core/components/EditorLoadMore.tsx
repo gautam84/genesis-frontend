@@ -1,4 +1,4 @@
-import type { PaginatedDocument } from '@/hooks/usePaginatedDocument';
+import type { PaginatedDocument } from '@/features/editor/core/hooks/usePaginatedDocument';
 
 type EditorLoadMoreProps = Pick<
   PaginatedDocument,

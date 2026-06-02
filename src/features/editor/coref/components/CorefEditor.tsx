@@ -41,9 +41,9 @@ import {
   mergeClustersAction,
 } from '@/features/editor/coref/coref.actions';
 import { updateDocumentStatusAction } from '@/features/document/document.actions';
-import { useEditorSession } from '@/hooks/useEditorSession';
-import { DocumentSwitcher } from '@/components/editor/DocumentSwitcher';
-import { EditorHelpPanel } from '@/components/editor/EditorHelpPanel';
+import { useEditorSession } from '@/features/editor/core/hooks/useEditorSession';
+import { DocumentSwitcher } from '@/features/editor/core/components/DocumentSwitcher';
+import { EditorHelpPanel } from '@/features/editor/core/components/EditorHelpPanel';
 import { FullScreenLoader } from '@/components/Spinner';
 import { CLUSTER_COLORS, EDITOR_PAGE_SIZE as PAGE_SIZE } from '@/lib/constants';
 import { toast } from 'sonner';

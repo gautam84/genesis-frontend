@@ -6,7 +6,7 @@ import type { DocumentContentResponse } from '@/lib/api';
 import { getDocumentContentAction } from '@/features/editor/core/editor.actions';
 
 // Canonical value lives in `@/lib/constants`; imported for local use and
-// re-exported so existing `@/hooks/usePaginatedDocument` importers resolve it unchanged.
+// re-exported so existing `@/features/editor/core/hooks/usePaginatedDocument` importers resolve it unchanged.
 import { EDITOR_PAGE_SIZE } from '@/lib/constants';
 export { EDITOR_PAGE_SIZE };
 

@@ -43,11 +43,11 @@ import {
   listNerTagsAction,
 } from '@/features/editor/ner/ner.actions';
 import { updateDocumentStatusAction } from '@/features/document/document.actions';
-import { useEditorSession } from '@/hooks/useEditorSession';
-import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/hooks/usePaginatedDocument';
-import { EditorLoadMore } from '@/components/editor/EditorLoadMore';
-import { DocumentSwitcher } from '@/components/editor/DocumentSwitcher';
-import { EditorHelpPanel } from '@/components/editor/EditorHelpPanel';
+import { useEditorSession } from '@/features/editor/core/hooks/useEditorSession';
+import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/features/editor/core/hooks/usePaginatedDocument';
+import { EditorLoadMore } from '@/features/editor/core/components/EditorLoadMore';
+import { DocumentSwitcher } from '@/features/editor/core/components/DocumentSwitcher';
+import { EditorHelpPanel } from '@/features/editor/core/components/EditorHelpPanel';
 import { FullScreenLoader } from '@/components/Spinner';
 import { CUSTOM_TAG_PALETTE } from '@/lib/constants';
 import { toast } from 'sonner';

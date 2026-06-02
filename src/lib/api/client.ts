@@ -12,11 +12,9 @@ export { NetworkError, SessionExpiredError } from '@/server/errors';
 // Phase 8 cleanup sweep rewrites importers.
 export type { ApiResponse, CursorPage } from '@/server/contracts/common';
 
-if (!process.env.NEXT_PUBLIC_API_URL && process.env.NODE_ENV === 'production') {
-    throw new Error('NEXT_PUBLIC_API_URL must be set in production builds');
-}
-
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+// `API_BASE_URL` + its prod-required validation moved to `@/config/env`.
+// Re-exported so the `@/lib/api` barrel surface is unchanged until Phase 8.
+export { API_BASE_URL } from '@/config/env';
 
 export interface ApiError {
     success: boolean;

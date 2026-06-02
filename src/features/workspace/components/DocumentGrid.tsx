@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { DocumentResponse } from '@/lib/api';
+import { DocumentResponse } from '@/features/document/document.contracts';
 import { isOneOf } from '@/lib/utils';
 
 export const DOCUMENT_FILTERS = ['all', 'completed', 'in-progress', 'unannotated'] as const;

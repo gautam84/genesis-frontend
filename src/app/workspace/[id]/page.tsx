@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation';
 import { SessionExpiredError } from '@/lib/errors';
 import { listDocuments } from '@/features/document/document.gateway';
-import { getWorkspaceById, listMembers } from '@/lib/server/workspace';
-import { WorkspaceClient } from './WorkspaceClient';
+import { getWorkspaceById, listMembers } from '@/features/workspace/workspace.gateway';
+import { WorkspaceShell } from '@/features/workspace/components/WorkspaceShell';
 
 export default async function WorkspacePage({
   params,
@@ -17,7 +17,7 @@ export default async function WorkspacePage({
       listMembers(id),
     ]);
     return (
-      <WorkspaceClient
+      <WorkspaceShell
         workspaceId={id}
         initialWorkspace={workspace}
         initialDocuments={documents}

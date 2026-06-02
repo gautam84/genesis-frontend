@@ -2,7 +2,7 @@
 
 import { ArrowLeft, FileText, Home, Settings as SettingsIcon, Tag, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { WorkspaceResponse } from '@/lib/api';
+import { WorkspaceResponse } from '@/features/workspace/workspace.contracts';
 
 export type SidebarItem = 'getting-started' | 'documents' | 'collaborators' | 'schema' | 'settings';
 

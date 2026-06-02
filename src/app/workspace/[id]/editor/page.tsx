@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import type { AnnotationType } from '@/lib/api';
 import { SessionExpiredError } from '@/lib/errors';
-import { getWorkspaceById } from '@/lib/server/workspace';
+import { getWorkspaceById } from '@/features/workspace/workspace.gateway';
 import { isOneOf } from '@/lib/utils';
 import CorefEditor from './coref-editor';
 import NerEditor from './ner-editor';

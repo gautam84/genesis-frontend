@@ -49,19 +49,10 @@ import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/features/editor/core/h
 import { EditorLoadMore } from '@/features/editor/core/components/EditorLoadMore';
 import { DocumentSwitcher } from '@/features/editor/core/components/DocumentSwitcher';
 import { EditorHelpPanel } from '@/features/editor/core/components/EditorHelpPanel';
+import { DisagreementDots } from '@/features/editor/core/components/DisagreementDots';
 import { FullScreenLoader } from '@/components/Spinner';
-import { mergeTagDefinitions } from '@/features/editor/core/editor.utils';
+import { buildEditorData, groupAnnotationsByToken, mergeTagDefinitions } from '@/features/editor/core/editor.utils';
 import { toast } from 'sonner';
-
-// Group flat annotations into Record<tokenId, PosAnnotation[]>.
-function groupAnnotationsByToken(annotations: PosAnnotation[]): Record<string, PosAnnotation[]> {
-  const out: Record<string, PosAnnotation[]> = {};
-  for (const a of annotations) {
-    if (!out[a.tokenId]) out[a.tokenId] = [];
-    out[a.tokenId].push(a);
-  }
-  return out;
-}
 
 interface PosEditorProps {
   workspaceId: string;
@@ -146,16 +137,7 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
         }
       }
 
-      setEditorData({
-        workspaceId,
-        workspaceName,
-        annotationType: 'POS',
-        documents,
-        session: savedSession,
-        totalDocuments: documents.length,
-        totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
-        totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
-      });
+      setEditorData(buildEditorData(workspaceId, workspaceName, 'POS', documents, savedSession));
 
       if (documents.length > 0) {
         const doc = documents[initialDocIndex];
@@ -613,23 +595,10 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
                     &mdash;
                   </span>
                 )}
-                {others.length > 0 && (
-                  <span
-                    className="flex gap-0.5 mt-0.5 leading-none"
-                    title={disagreementTitle}
-                  >
-                    {others.slice(0, 5).map((a) => {
-                      const otherInfo = getPosTagInfo(a.posTag);
-                      return (
-                        <span
-                          key={a.id}
-                          className="w-1 h-1 rounded-full"
-                          style={{ backgroundColor: otherInfo?.color || '#9ca3af' }}
-                        />
-                      );
-                    })}
-                  </span>
-                )}
+                <DisagreementDots
+                  dots={others.map(a => ({ id: a.id, color: getPosTagInfo(a.posTag)?.color || '#9ca3af' }))}
+                  title={disagreementTitle}
+                />
               </span>
             );
           })}

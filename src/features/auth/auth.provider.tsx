@@ -16,9 +16,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [user, setUser] = useState<UserResponse | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+export function AuthProvider({
+    children,
+    initialUser,
+}: {
+    children: React.ReactNode;
+    /**
+     * Session resolved on the server and passed in by the route-group layout.
+     * When provided (even as `null`), the provider trusts it for first paint and
+     * skips the mount-time round-trip — no auth loader flash, no extra /me call.
+     * `undefined` means "not seeded": fall back to fetching on mount.
+     */
+    initialUser?: UserResponse | null;
+}) {
+    const seeded = initialUser !== undefined;
+    const [user, setUser] = useState<UserResponse | null>(initialUser ?? null);
+    const [isLoading, setIsLoading] = useState(!seeded);
     const router = useRouter();
 
     const refreshUser = useCallback(async () => {
@@ -39,10 +52,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false);
     }, []);
 
-    // Check authentication status on mount
+    // Only fetch on mount when the server didn't already seed the session.
     useEffect(() => {
+        if (seeded) return;
         refreshUser();
-    }, [refreshUser]);
+    }, [seeded, refreshUser]);
 
     const login = async (usernameOrEmail: string, password: string) => {
         setIsLoading(true);

@@ -50,7 +50,7 @@ import { EditorLoadMore } from '@/features/editor/core/components/EditorLoadMore
 import { DocumentSwitcher } from '@/features/editor/core/components/DocumentSwitcher';
 import { EditorHelpPanel } from '@/features/editor/core/components/EditorHelpPanel';
 import { FullScreenLoader } from '@/components/Spinner';
-import { mergeTagDefinitions } from '@/features/editor/core/editor.utils';
+import { buildEditorData, mergeTagDefinitions } from '@/features/editor/core/editor.utils';
 import { toast } from 'sonner';
 
 interface NerEditorProps {
@@ -144,16 +144,7 @@ export default function NerEditor({ workspaceId, workspaceName }: NerEditorProps
         }
       }
 
-      setEditorData({
-        workspaceId,
-        workspaceName,
-        annotationType: 'NER',
-        documents,
-        session: savedSession,
-        totalDocuments: documents.length,
-        totalTokens: documents.reduce((sum, d) => sum + (d.tokenCount || 0), 0),
-        totalSentences: documents.reduce((sum, d) => sum + (d.sentenceCount || 0), 0),
-      });
+      setEditorData(buildEditorData(workspaceId, workspaceName, 'NER', documents, savedSession));
 
       if (documents.length > 0) {
         const doc = documents[initialDocIndex];

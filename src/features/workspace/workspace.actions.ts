@@ -1,14 +1,15 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import type { ActionResult } from '@/server/contracts/common';
+import { SessionExpiredError } from '@/server/errors';
 import type {
   AddMemberRequest,
   CreateWorkspaceRequest,
   MemberRole,
   UpdateWorkspaceRequest,
   WorkspaceResponse,
-} from '@/lib/api';
-import { SessionExpiredError } from '@/lib/errors';
+} from './workspace.contracts';
 import {
   addMember,
   createWorkspace,
@@ -16,11 +17,7 @@ import {
   removeMember,
   updateMemberRole,
   updateWorkspace,
-} from '@/lib/server/workspace';
-
-type ActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+} from './workspace.gateway';
 
 function toError(err: unknown, fallback: string): { ok: false; error: string } {
   if (err instanceof SessionExpiredError) {

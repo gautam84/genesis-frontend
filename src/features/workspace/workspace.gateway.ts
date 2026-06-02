@@ -1,15 +1,15 @@
 import 'server-only';
 
+import { ApiResponse } from '@/server/contracts/common';
+import { serverFetch } from '@/server/http';
 import {
   AddMemberRequest,
-  ApiResponse,
   CreateWorkspaceRequest,
   MemberResponse,
   MemberRole,
   UpdateWorkspaceRequest,
   WorkspaceResponse,
-} from '@/lib/api';
-import { serverFetch } from './api';
+} from './workspace.contracts';
 
 /**
  * Server-side wrappers around the workspace endpoints. Same shapes as

@@ -19,29 +19,31 @@ import {
 import { useAuth } from '@/features/auth/auth.provider';
 import {
   type WorkspaceResponse,
-  type DocumentResponse,
   type MemberResponse,
   type MemberRole,
+} from '@/features/workspace/workspace.contracts';
+import type { DocumentResponse } from '@/features/document/document.contracts';
+import {
   ExportFormat,
   Column2Mode,
   type ExportOptions,
-} from '@/lib/api';
+} from '@/features/workspace/export.contracts';
 import {
   addMemberAction,
   deleteWorkspaceAction,
   removeMemberAction,
   updateMemberRoleAction,
   updateWorkspaceAction,
-} from '@/lib/actions/workspace';
+} from '@/features/workspace/workspace.actions';
 import {
   deleteDocumentAction,
   uploadDocumentAction,
 } from '@/features/document/document.actions';
 import { NotificationDropdown } from '@/features/notifications/components/NotificationDropdown';
-import { Sidebar, SidebarItem } from './_components/Sidebar';
-import { DocumentGrid, DocumentFilter } from './_components/DocumentGrid';
-import { MemberManagement } from './_components/MemberManagement';
-import { ExportDialog } from './_components/ExportDialog';
+import { Sidebar, SidebarItem } from './Sidebar';
+import { DocumentGrid, DocumentFilter } from './DocumentGrid';
+import { MemberManagement } from './MemberManagement';
+import { ExportDialog } from './ExportDialog';
 import { toast } from 'sonner';
 
 type Props = {
@@ -51,7 +53,7 @@ type Props = {
   initialMembers: MemberResponse[];
 };
 
-export function WorkspaceClient({
+export function WorkspaceShell({
   workspaceId,
   initialWorkspace,
   initialDocuments,

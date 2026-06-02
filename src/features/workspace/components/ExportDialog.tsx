@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Column2Mode, ExportFormat } from '@/lib/api';
+import { Column2Mode, ExportFormat } from '@/features/workspace/export.contracts';
 import { isOneOf } from '@/lib/utils';
 
 const EXPORT_FORMATS = Object.values(ExportFormat) as readonly ExportFormat[];

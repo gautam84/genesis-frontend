@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { MemberResponse, MemberRole } from '@/lib/api';
+import { MemberResponse, MemberRole } from '@/features/workspace/workspace.contracts';
 import { isOneOf } from '@/lib/utils';
 
 const MEMBER_ROLES: readonly MemberRole[] = ['ADMIN', 'CURATOR', 'ANNOTATOR'];

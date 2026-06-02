@@ -4,7 +4,7 @@ import { SessionExpiredError } from '@/server/errors';
 import { getWorkspaceDocuments } from '@/features/editor/core/editor.gateway';
 import { listRecommendations } from '@/features/recommendations/recommendations.gateway';
 import { getWorkspaceById } from '@/features/workspace/workspace.gateway';
-import { RecommendationsClient } from './RecommendationsClient';
+import { RecommendationsClient } from '@/features/recommendations/components/RecommendationsClient';
 
 export default async function RecommendationsPage({
   params,

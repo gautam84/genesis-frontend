@@ -34,6 +34,7 @@ import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/features/editor/core/h
 import { EditorLoadMore } from '@/features/editor/core/components/EditorLoadMore';
 import { DocumentSwitcher } from '@/features/editor/core/components/DocumentSwitcher';
 import { EditorHelpPanel } from '@/features/editor/core/components/EditorHelpPanel';
+import { DisagreementDots } from '@/features/editor/core/components/DisagreementDots';
 import { WsdSenseInventory } from '@/features/editor/wsd/components/WsdSenseInventory';
 import { FullScreenLoader } from '@/components/Spinner';
 import { toast } from 'sonner';
@@ -603,13 +604,10 @@ export default function WsdEditor({ workspaceId, workspaceName }: WsdEditorProps
                             &mdash;
                           </span>
                         )}
-                        {others.length > 0 && (
-                          <span className="flex gap-0.5 mt-0.5 leading-none" title={disagreementTitle}>
-                            {others.slice(0, 5).map(a => (
-                              <span key={a.id} className="w-1 h-1 rounded-full bg-amber-400" />
-                            ))}
-                          </span>
-                        )}
+                        <DisagreementDots
+                          dots={others.map(a => ({ id: a.id }))}
+                          title={disagreementTitle}
+                        />
                       </span>
                     );
                   })}

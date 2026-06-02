@@ -49,6 +49,7 @@ import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/features/editor/core/h
 import { EditorLoadMore } from '@/features/editor/core/components/EditorLoadMore';
 import { DocumentSwitcher } from '@/features/editor/core/components/DocumentSwitcher';
 import { EditorHelpPanel } from '@/features/editor/core/components/EditorHelpPanel';
+import { DisagreementDots } from '@/features/editor/core/components/DisagreementDots';
 import { FullScreenLoader } from '@/components/Spinner';
 import { mergeTagDefinitions } from '@/features/editor/core/editor.utils';
 import { toast } from 'sonner';
@@ -613,23 +614,10 @@ export default function PosEditor({ workspaceId, workspaceName }: PosEditorProps
                     &mdash;
                   </span>
                 )}
-                {others.length > 0 && (
-                  <span
-                    className="flex gap-0.5 mt-0.5 leading-none"
-                    title={disagreementTitle}
-                  >
-                    {others.slice(0, 5).map((a) => {
-                      const otherInfo = getPosTagInfo(a.posTag);
-                      return (
-                        <span
-                          key={a.id}
-                          className="w-1 h-1 rounded-full"
-                          style={{ backgroundColor: otherInfo?.color || '#9ca3af' }}
-                        />
-                      );
-                    })}
-                  </span>
-                )}
+                <DisagreementDots
+                  dots={others.map(a => ({ id: a.id, color: getPosTagInfo(a.posTag)?.color || '#9ca3af' }))}
+                  title={disagreementTitle}
+                />
               </span>
             );
           })}

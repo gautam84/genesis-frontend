@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { SessionExpiredError } from '@/lib/errors';
+import { SessionExpiredError } from '@/server/errors';
 import { listDocuments } from '@/features/document/document.gateway';
 import { getWorkspaceById, listMembers } from '@/features/workspace/workspace.gateway';
 import { WorkspaceShell } from '@/features/workspace/components/WorkspaceShell';

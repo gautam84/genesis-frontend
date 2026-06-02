@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { DocumentContentResponse } from '@/lib/api';
+import type { DocumentContentResponse } from '@/features/editor/core/editor.contracts';
 import { getDocumentContentAction } from '@/features/editor/core/editor.actions';
 
 // Canonical value lives in `@/lib/constants`; imported for local use and

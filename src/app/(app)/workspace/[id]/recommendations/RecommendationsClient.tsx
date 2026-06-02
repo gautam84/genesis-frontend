@@ -7,10 +7,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   recommendationsApi,
-  type AnnotationType,
   type Recommendation,
   type RecommendationPriority,
-} from '@/lib/api';
+} from '@/features/recommendations/recommendations.contracts';
+import type { AnnotationType } from '@/features/workspace/workspace.contracts';
 import {
   dismissRecommendationAction,
   issueShareTokenAction,

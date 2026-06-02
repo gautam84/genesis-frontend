@@ -1,10 +1,10 @@
 /**
  * Validated, Edge-safe environment access.
  *
- * Imported by `src/middleware.ts` (Edge runtime), `src/server/http.ts`, and —
- * via the `@/lib/api` barrel — client code. It must therefore NOT import
- * `server-only` or `next/headers`. `NEXT_PUBLIC_*` vars are inlined at build
- * time, so this resolves on the server, the Edge, and the client alike.
+ * Imported by `src/middleware.ts` (Edge runtime), `src/server/http.ts`, and
+ * client code. It must therefore NOT import `server-only` or `next/headers`.
+ * `NEXT_PUBLIC_*` vars are inlined at build time, so this resolves on the
+ * server, the Edge, and the client alike.
  */
 
 if (!process.env.NEXT_PUBLIC_API_URL && process.env.NODE_ENV === 'production') {

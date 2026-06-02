@@ -20,16 +20,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/features/auth/auth.provider';
+import type {
+  WorkspaceEditorResponse,
+  DocumentContentResponse,
+  TokenDto,
+} from '@/features/editor/core/editor.contracts';
 import {
-  type WorkspaceEditorResponse,
-  type DocumentContentResponse,
-  type TokenDto,
   UNIVERSAL_POS_TAGS,
   type PosTag,
   type PosTagDefinition,
   type PosTagScope,
   type PosAnnotation,
-} from '@/lib/api';
+} from '@/features/editor/pos/pos.contracts';
 import {
   getDocumentContentAction,
   getEditorDocumentsAction,

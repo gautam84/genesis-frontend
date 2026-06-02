@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { SessionExpiredError } from '@/lib/errors';
+import { SessionExpiredError } from '@/server/errors';
 import { listWorkspaces } from '@/features/workspace/workspace.gateway';
 import { HomeClient } from './HomeClient';
 

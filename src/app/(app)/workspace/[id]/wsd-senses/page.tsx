@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { SessionExpiredError } from '@/lib/errors';
+import { SessionExpiredError } from '@/server/errors';
 import { listSenses } from '@/features/editor/wsd/wsd.gateway';
 import { WsdSensesClient } from '@/features/editor/wsd/components/WsdSensesClient';
 

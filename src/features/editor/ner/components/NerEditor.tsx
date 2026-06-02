@@ -19,16 +19,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/features/auth/auth.provider';
+import type {
+  WorkspaceEditorResponse,
+  DocumentContentResponse,
+  TokenDto,
+} from '@/features/editor/core/editor.contracts';
 import {
-  type WorkspaceEditorResponse,
-  type DocumentContentResponse,
-  type TokenDto,
   UNIVERSAL_NER_TAGS,
   type NerTag,
   type NerTagDefinition,
   type NerTagScope,
   type NerAnnotation,
-} from '@/lib/api';
+} from '@/features/editor/ner/ner.contracts';
 import {
   getDocumentContentAction,
   getEditorDocumentsAction,

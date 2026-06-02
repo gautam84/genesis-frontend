@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { cookies } from 'next/headers';
-import { TokenResponse } from '@/lib/api';
+import { TokenResponse } from '@/features/auth/auth.contracts';
 import { NetworkError, SessionExpiredError } from '@/server/errors';
 import {
   ACCESS_COOKIE,
@@ -25,7 +25,8 @@ import { API_BASE_URL } from '@/config/env';
  * `/api/auth/end-session`, which clears cookies and routes to /login.
  */
 
-// Re-exported for back-compat with importers of `@/lib/server/api`.
+// Re-exported so callers (e.g. the export/end-session route handlers) can read
+// cookie names without a separate import from `@/server/cookies`.
 export { ACCESS_COOKIE, REFRESH_COOKIE };
 
 export async function setSessionCookies(tokens: TokenResponse) {

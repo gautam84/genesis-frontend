@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { ACCESS_COOKIE } from '@/lib/server/api';
+import { ACCESS_COOKIE } from '@/server/http';
 
 /**
  * Proxies the export blob from Spring to the browser. Server actions can't

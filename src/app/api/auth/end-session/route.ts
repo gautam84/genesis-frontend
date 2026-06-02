@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { clearSessionCookies } from '@/lib/server/api';
+import { clearSessionCookies } from '@/server/http';
 
 /**
  * Logout endpoint reachable from server components — they cannot mutate

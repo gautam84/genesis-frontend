@@ -21,9 +21,9 @@ interface WsdSenseInventoryProps {
 
 /**
  * Left-pane sense inventory for the WSD editor: lists the workspace's senses
- * grouped by word and lets admins add / edit / delete them inline. Mirrors the
- * standalone /wsd-senses page but sized for the editor sidebar. Sense mutations
- * are admin-only on the backend; non-admins see the rejection inline.
+ * grouped by word and lets admins add / edit / delete them inline — the single
+ * surface for sense management. Sense mutations are admin-only on the backend;
+ * non-admins see the rejection inline.
  */
 export function WsdSenseInventory({ workspaceId, onSensesChanged }: WsdSenseInventoryProps) {
   const [senses, setSenses] = useState<WsdSense[]>([]);

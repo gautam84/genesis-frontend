@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '@/server/contracts/common';
 import { SessionExpiredError } from '@/server/errors';
 import type {
@@ -34,9 +33,7 @@ export async function createSenseAction(
   request: CreateWsdSenseRequest,
 ): Promise<ActionResult<WsdSense>> {
   try {
-    const sense = await createSense(workspaceId, request);
-    revalidatePath(`/workspace/${workspaceId}/wsd-senses`);
-    return { ok: true, data: sense };
+    const sense = await createSense(workspaceId, request);    return { ok: true, data: sense };
   } catch (err) {
     return toError(err, 'Failed to create sense. Admin role is required.');
   }
@@ -48,9 +45,7 @@ export async function updateSenseAction(
   request: CreateWsdSenseRequest,
 ): Promise<ActionResult<WsdSense>> {
   try {
-    const sense = await updateSense(workspaceId, senseId, request);
-    revalidatePath(`/workspace/${workspaceId}/wsd-senses`);
-    return { ok: true, data: sense };
+    const sense = await updateSense(workspaceId, senseId, request);    return { ok: true, data: sense };
   } catch (err) {
     return toError(err, 'Failed to update sense.');
   }
@@ -61,9 +56,7 @@ export async function deleteSenseAction(
   senseId: string,
 ): Promise<ActionResult<void>> {
   try {
-    await deleteSense(workspaceId, senseId);
-    revalidatePath(`/workspace/${workspaceId}/wsd-senses`);
-    return { ok: true, data: undefined };
+    await deleteSense(workspaceId, senseId);    return { ok: true, data: undefined };
   } catch (err) {
     return toError(err, 'Failed to delete sense.');
   }

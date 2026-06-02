@@ -7,6 +7,8 @@
  *   actions. Previously duplicated verbatim in all ten action files.
  */
 
+import { SessionExpiredError } from '@/server/errors';
+
 export interface ApiResponse<T> {
     success: boolean;
     data: T;
@@ -33,3 +35,15 @@ export interface CursorPage<T> {
 export type ActionResult<T> =
     | { ok: true; data: T }
     | { ok: false; error: string };
+
+/**
+ * Maps a thrown error to the failed `ActionResult` branch. Special-cases
+ * `SessionExpiredError` to a stable message; otherwise surfaces the error's
+ * message, falling back to `fallback`. Shared by every feature's actions.
+ */
+export function toActionError(err: unknown, fallback: string): { ok: false; error: string } {
+    if (err instanceof SessionExpiredError) {
+        return { ok: false, error: 'Session expired. Please log in again.' };
+    }
+    return { ok: false, error: err instanceof Error ? err.message : fallback };
+}

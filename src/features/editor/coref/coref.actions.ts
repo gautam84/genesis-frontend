@@ -1,7 +1,6 @@
 'use server';
 
-import type { ActionResult } from '@/server/contracts/common';
-import { SessionExpiredError } from '@/server/errors';
+import { type ActionResult, toActionError } from '@/server/contracts/common';
 import type {
   ClusterDto,
   CreateClusterRequest,
@@ -19,13 +18,6 @@ import {
   mergeClusters,
 } from './coref.gateway';
 
-function toError(err: unknown, fallback: string): { ok: false; error: string } {
-  if (err instanceof SessionExpiredError) {
-    return { ok: false, error: 'Session expired. Please log in again.' };
-  }
-  return { ok: false, error: err instanceof Error ? err.message : fallback };
-}
-
 // ==================== Mentions ====================
 
 export async function getMentionsByWorkspaceAction(
@@ -35,7 +27,7 @@ export async function getMentionsByWorkspaceAction(
     const data = await getMentionsByWorkspace(workspaceId);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to load mentions.');
+    return toActionError(err, 'Failed to load mentions.');
   }
 }
 
@@ -47,7 +39,7 @@ export async function createMentionAction(
     const mention = await createMention(workspaceId, data);
     return { ok: true, data: mention };
   } catch (err) {
-    return toError(err, 'Failed to create mention.');
+    return toActionError(err, 'Failed to create mention.');
   }
 }
 
@@ -59,7 +51,7 @@ export async function assignToClusterAction(
     const data = await assignToCluster(mentionId, clusterId);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to assign mention to cluster.');
+    return toActionError(err, 'Failed to assign mention to cluster.');
   }
 }
 
@@ -70,7 +62,7 @@ export async function deleteMentionAction(
     await deleteMention(mentionId);
     return { ok: true, data: undefined };
   } catch (err) {
-    return toError(err, 'Failed to delete mention.');
+    return toActionError(err, 'Failed to delete mention.');
   }
 }
 
@@ -83,7 +75,7 @@ export async function getClustersAction(
     const data = await getClusters(workspaceId);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to load clusters.');
+    return toActionError(err, 'Failed to load clusters.');
   }
 }
 
@@ -95,7 +87,7 @@ export async function createClusterAction(
     const data = await createCluster(workspaceId, request);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to create cluster.');
+    return toActionError(err, 'Failed to create cluster.');
   }
 }
 
@@ -106,7 +98,7 @@ export async function deleteClusterAction(
     await deleteCluster(clusterId);
     return { ok: true, data: undefined };
   } catch (err) {
-    return toError(err, 'Failed to delete cluster.');
+    return toActionError(err, 'Failed to delete cluster.');
   }
 }
 
@@ -119,6 +111,6 @@ export async function mergeClustersAction(
     const data = await mergeClusters(workspaceId, sourceClusterIds, targetClusterId);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to merge clusters.');
+    return toActionError(err, 'Failed to merge clusters.');
   }
 }

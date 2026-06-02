@@ -1,7 +1,6 @@
 'use server';
 
-import type { ActionResult } from '@/server/contracts/common';
-import { SessionExpiredError } from '@/server/errors';
+import { type ActionResult, toActionError } from '@/server/contracts/common';
 import type {
   CreatePosTagRequest,
   PosAnnotation,
@@ -14,13 +13,6 @@ import {
   updateTokenPos,
 } from './pos.gateway';
 
-function toError(err: unknown, fallback: string): { ok: false; error: string } {
-  if (err instanceof SessionExpiredError) {
-    return { ok: false, error: 'Session expired. Please log in again.' };
-  }
-  return { ok: false, error: err instanceof Error ? err.message : fallback };
-}
-
 export async function listPosTagsAction(
   workspaceId?: string,
 ): Promise<ActionResult<PosTagDefinition[]>> {
@@ -28,7 +20,7 @@ export async function listPosTagsAction(
     const data = await listTags(workspaceId);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to load POS tags.');
+    return toActionError(err, 'Failed to load POS tags.');
   }
 }
 
@@ -39,7 +31,7 @@ export async function createPosTagAction(
     const data = await createTag(request);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to create POS tag.');
+    return toActionError(err, 'Failed to create POS tag.');
   }
 }
 
@@ -50,7 +42,7 @@ export async function listPosAnnotationsAction(
     const data = await getAnnotationsForDocument(documentId);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to load POS annotations.');
+    return toActionError(err, 'Failed to load POS annotations.');
   }
 }
 
@@ -62,6 +54,6 @@ export async function updateTokenPosAction(
     const data = await updateTokenPos(tokenId, pos);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to update token POS.');
+    return toActionError(err, 'Failed to update token POS.');
   }
 }

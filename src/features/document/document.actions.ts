@@ -1,21 +1,13 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { ActionResult } from '@/server/contracts/common';
-import { SessionExpiredError } from '@/server/errors';
+import { type ActionResult, toActionError } from '@/server/contracts/common';
 import type { DocumentResponse } from './document.contracts';
 import {
   deleteDocument,
   updateDocumentStatus,
   uploadDocument,
 } from './document.gateway';
-
-function toError(err: unknown, fallback: string): { ok: false; error: string } {
-  if (err instanceof SessionExpiredError) {
-    return { ok: false, error: 'Session expired. Please log in again.' };
-  }
-  return { ok: false, error: err instanceof Error ? err.message : fallback };
-}
 
 export async function deleteDocumentAction(
   workspaceId: string,
@@ -26,7 +18,7 @@ export async function deleteDocumentAction(
     revalidatePath(`/workspace/${workspaceId}`);
     return { ok: true, data: undefined };
   } catch (err) {
-    return toError(err, 'Failed to delete document');
+    return toActionError(err, 'Failed to delete document');
   }
 }
 
@@ -38,7 +30,7 @@ export async function updateDocumentStatusAction(
     const data = await updateDocumentStatus(documentId, status);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to update document status');
+    return toActionError(err, 'Failed to update document status');
   }
 }
 
@@ -55,6 +47,6 @@ export async function uploadDocumentAction(
     revalidatePath(`/workspace/${workspaceId}`);
     return { ok: true, data };
   } catch (err) {
-    return toError(err, 'Failed to upload document');
+    return toActionError(err, 'Failed to upload document');
   }
 }

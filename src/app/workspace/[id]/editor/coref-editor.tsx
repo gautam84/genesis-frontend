@@ -29,7 +29,7 @@ import {
   getEditorDocumentsAction,
   getEditorSessionAction,
   saveEditorSessionAction,
-} from '@/lib/actions/editor';
+} from '@/features/editor/core/editor.actions';
 import {
   assignToClusterAction,
   createClusterAction,
@@ -39,7 +39,7 @@ import {
   getClustersAction,
   getMentionsByWorkspaceAction,
   mergeClustersAction,
-} from '@/lib/actions/coref';
+} from '@/features/editor/coref/coref.actions';
 import { updateDocumentStatusAction } from '@/features/document/document.actions';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { DocumentSwitcher } from '@/components/editor/DocumentSwitcher';

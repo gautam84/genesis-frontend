@@ -1,12 +1,12 @@
 import 'server-only';
 
+import { ApiResponse } from '@/server/contracts/common';
+import { serverFetch } from '@/server/http';
 import {
-  ApiResponse,
   CreatePosTagRequest,
   PosAnnotation,
   PosTagDefinition,
-} from '@/lib/api';
-import { serverFetch } from './api';
+} from './pos.contracts';
 
 export async function listTags(workspaceId?: string): Promise<PosTagDefinition[]> {
   const qs = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : '';

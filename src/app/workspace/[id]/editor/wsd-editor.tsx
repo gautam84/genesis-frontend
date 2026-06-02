@@ -22,13 +22,13 @@ import {
   getEditorDocumentsAction,
   getEditorSessionAction,
   saveEditorSessionAction,
-} from '@/lib/actions/editor';
+} from '@/features/editor/core/editor.actions';
 import {
   deleteAnnotationAction,
   listAnnotationsForDocumentAction,
   listSensesAction,
   upsertAnnotationAction,
-} from '@/lib/actions/wsd';
+} from '@/features/editor/wsd/wsd.actions';
 import { updateDocumentStatusAction } from '@/features/document/document.actions';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/hooks/usePaginatedDocument';

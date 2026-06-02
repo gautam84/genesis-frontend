@@ -34,14 +34,14 @@ import {
   getEditorDocumentsAction,
   getEditorSessionAction,
   saveEditorSessionAction,
-} from '@/lib/actions/editor';
+} from '@/features/editor/core/editor.actions';
 import {
   createNerAnnotationAction,
   createNerTagAction,
   deleteNerAnnotationAction,
   listNerAnnotationsAction,
   listNerTagsAction,
-} from '@/lib/actions/ner';
+} from '@/features/editor/ner/ner.actions';
 import { updateDocumentStatusAction } from '@/features/document/document.actions';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/hooks/usePaginatedDocument';

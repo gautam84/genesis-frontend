@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WorkspaceEditorResponse } from '@/lib/api';
-import { saveEditorSessionAction } from '@/lib/actions/editor';
+import { saveEditorSessionAction } from '@/features/editor/core/editor.actions';
 
 interface UseEditorSessionParams {
   workspaceId: string;

@@ -1,12 +1,12 @@
 import 'server-only';
 
+import { ApiResponse } from '@/server/contracts/common';
+import { serverFetch } from '@/server/http';
 import {
-  ApiResponse,
   CreateWsdSenseRequest,
   WsdAnnotation,
   WsdSense,
-} from '@/lib/api';
-import { serverFetch } from './api';
+} from './wsd.contracts';
 
 export async function listSenses(
   workspaceId: string,

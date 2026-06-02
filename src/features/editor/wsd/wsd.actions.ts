@@ -1,12 +1,13 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import type { ActionResult } from '@/server/contracts/common';
+import { SessionExpiredError } from '@/server/errors';
 import type {
   CreateWsdSenseRequest,
   WsdAnnotation,
   WsdSense,
-} from '@/lib/api';
-import { SessionExpiredError } from '@/lib/errors';
+} from './wsd.contracts';
 import {
   createSense,
   deleteAnnotation,
@@ -16,11 +17,7 @@ import {
   listSenses,
   updateSense,
   upsertAnnotation,
-} from '@/lib/server/wsd';
-
-type ActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+} from './wsd.gateway';
 
 function toError(
   err: unknown,

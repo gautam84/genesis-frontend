@@ -1,12 +1,13 @@
 'use server';
 
+import type { ActionResult } from '@/server/contracts/common';
+import { SessionExpiredError } from '@/server/errors';
 import type {
   ClusterDto,
   CreateClusterRequest,
   CreateMentionRequest,
   MentionDto,
-} from '@/lib/api';
-import { SessionExpiredError } from '@/lib/errors';
+} from './coref.contracts';
 import {
   assignToCluster,
   createCluster,
@@ -16,11 +17,7 @@ import {
   getClusters,
   getMentionsByWorkspace,
   mergeClusters,
-} from '@/lib/server/coref';
-
-type ActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+} from './coref.gateway';
 
 function toError(err: unknown, fallback: string): { ok: false; error: string } {
   if (err instanceof SessionExpiredError) {

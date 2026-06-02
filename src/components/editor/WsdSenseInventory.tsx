@@ -10,7 +10,7 @@ import {
   deleteSenseAction,
   listSensesAction,
   updateSenseAction,
-} from '@/lib/actions/wsd';
+} from '@/features/editor/wsd/wsd.actions';
 
 interface WsdSenseInventoryProps {
   workspaceId: string;

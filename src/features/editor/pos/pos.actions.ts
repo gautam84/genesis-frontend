@@ -1,21 +1,18 @@
 'use server';
 
+import type { ActionResult } from '@/server/contracts/common';
+import { SessionExpiredError } from '@/server/errors';
 import type {
   CreatePosTagRequest,
   PosAnnotation,
   PosTagDefinition,
-} from '@/lib/api';
-import { SessionExpiredError } from '@/lib/errors';
+} from './pos.contracts';
 import {
   createTag,
   getAnnotationsForDocument,
   listTags,
   updateTokenPos,
-} from '@/lib/server/pos';
-
-type ActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+} from './pos.gateway';
 
 function toError(err: unknown, fallback: string): { ok: false; error: string } {
   if (err instanceof SessionExpiredError) {

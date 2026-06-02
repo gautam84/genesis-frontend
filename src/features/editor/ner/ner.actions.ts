@@ -1,23 +1,20 @@
 'use server';
 
+import type { ActionResult } from '@/server/contracts/common';
+import { SessionExpiredError } from '@/server/errors';
 import type {
   CreateNerAnnotationRequest,
   CreateNerTagRequest,
   NerAnnotation,
   NerTagDefinition,
-} from '@/lib/api';
-import { SessionExpiredError } from '@/lib/errors';
+} from './ner.contracts';
 import {
   createAnnotation,
   createTag,
   deleteAnnotation,
   listAnnotations,
   listTags,
-} from '@/lib/server/ner';
-
-type ActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+} from './ner.gateway';
 
 function toError(err: unknown, fallback: string): { ok: false; error: string } {
   if (err instanceof SessionExpiredError) {

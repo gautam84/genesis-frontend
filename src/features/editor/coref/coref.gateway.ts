@@ -1,14 +1,13 @@
 import 'server-only';
 
+import { ApiResponse, CursorPage } from '@/server/contracts/common';
+import { serverFetch } from '@/server/http';
 import {
-  ApiResponse,
   ClusterDto,
   CreateClusterRequest,
   CreateMentionRequest,
-  CursorPage,
   MentionDto,
-} from '@/lib/api';
-import { serverFetch } from './api';
+} from './coref.contracts';
 
 /** Page size when draining a cursor-paginated endpoint (backend caps at 500). */
 const DRAIN_PAGE_SIZE = 200;

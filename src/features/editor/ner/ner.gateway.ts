@@ -1,13 +1,13 @@
 import 'server-only';
 
+import { ApiResponse } from '@/server/contracts/common';
+import { serverFetch } from '@/server/http';
 import {
-  ApiResponse,
   CreateNerAnnotationRequest,
   CreateNerTagRequest,
   NerAnnotation,
   NerTagDefinition,
-} from '@/lib/api';
-import { serverFetch } from './api';
+} from './ner.contracts';
 
 export async function listTags(workspaceId?: string): Promise<NerTagDefinition[]> {
   const qs = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : '';

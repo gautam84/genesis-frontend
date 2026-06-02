@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { DocumentContentResponse } from '@/lib/api';
-import { getDocumentContentAction } from '@/lib/actions/editor';
+import { getDocumentContentAction } from '@/features/editor/core/editor.actions';
 
 // Canonical value lives in `@/lib/constants`; imported for local use and
 // re-exported so existing `@/hooks/usePaginatedDocument` importers resolve it unchanged.

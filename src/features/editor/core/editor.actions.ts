@@ -1,22 +1,19 @@
 'use server';
 
+import type { ActionResult } from '@/server/contracts/common';
+import { SessionExpiredError } from '@/server/errors';
 import type {
   DocumentContentResponse,
   EditorDocumentInfo,
   EditorSessionResponse,
   SaveSessionRequest,
-} from '@/lib/api';
-import { SessionExpiredError } from '@/lib/errors';
+} from './editor.contracts';
 import {
   getDocumentContent,
   getSession,
   getWorkspaceDocuments,
   saveSession,
-} from '@/lib/server/editor';
-
-type ActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+} from './editor.gateway';
 
 function toError(err: unknown, fallback: string): { ok: false; error: string } {
   if (err instanceof SessionExpiredError) {

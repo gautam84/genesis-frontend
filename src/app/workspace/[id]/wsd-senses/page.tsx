@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { SessionExpiredError } from '@/lib/errors';
-import { listSenses } from '@/lib/server/wsd';
+import { listSenses } from '@/features/editor/wsd/wsd.gateway';
 import { WsdSensesClient } from './WsdSensesClient';
 
 export default async function WsdSensesAdminPage({

@@ -35,13 +35,13 @@ import {
   getEditorDocumentsAction,
   getEditorSessionAction,
   saveEditorSessionAction,
-} from '@/lib/actions/editor';
+} from '@/features/editor/core/editor.actions';
 import {
   createPosTagAction,
   listPosAnnotationsAction,
   listPosTagsAction,
   updateTokenPosAction,
-} from '@/lib/actions/pos';
+} from '@/features/editor/pos/pos.actions';
 import { updateDocumentStatusAction } from '@/features/document/document.actions';
 import { useEditorSession } from '@/hooks/useEditorSession';
 import { usePaginatedDocument, EDITOR_PAGE_SIZE } from '@/hooks/usePaginatedDocument';

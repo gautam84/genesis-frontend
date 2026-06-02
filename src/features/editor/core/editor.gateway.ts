@@ -1,13 +1,13 @@
 import 'server-only';
 
+import { ApiResponse } from '@/server/contracts/common';
+import { serverFetch } from '@/server/http';
 import {
-  ApiResponse,
   DocumentContentResponse,
   EditorDocumentInfo,
   EditorSessionResponse,
   SaveSessionRequest,
-} from '@/lib/api';
-import { serverFetch } from './api';
+} from './editor.contracts';
 
 export async function getWorkspaceDocuments(
   workspaceId: string,

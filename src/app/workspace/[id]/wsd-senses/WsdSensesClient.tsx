@@ -11,7 +11,7 @@ import {
   createSenseAction,
   deleteSenseAction,
   updateSenseAction,
-} from '@/lib/actions/wsd';
+} from '@/features/editor/wsd/wsd.actions';
 
 type Props = {
   workspaceId: string;

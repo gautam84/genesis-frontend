@@ -1,5 +1,3 @@
-import { API_BASE_URL } from '@/config/env';
-
 export type RecommendationType =
     | 'UNFINISHED_MENTION'
     | 'DENSITY_GAP'
@@ -23,12 +21,3 @@ export interface ShareTokenResponse {
     token: string;
     expiresInSeconds: number;
 }
-
-// Pure URL builder for the share-link feature. Lives on the client because
-// the URL is rendered into the UI for the user to copy; no auth needed
-// (the token authenticates the public download).
-export const recommendationsApi = {
-    buildShareDownloadUrl: (workspaceId: string, token: string): string => {
-        return `${API_BASE_URL}/api/public/export/conll/${workspaceId}?token=${encodeURIComponent(token)}`;
-    },
-};

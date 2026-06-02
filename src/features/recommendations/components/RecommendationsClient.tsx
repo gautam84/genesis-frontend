@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
-  recommendationsApi,
   type Recommendation,
   type RecommendationPriority,
 } from '@/features/recommendations/recommendations.contracts';
+import { recommendationShareUrls } from '@/features/recommendations/recommendations.utils';
 import type { AnnotationType } from '@/features/workspace/workspace.contracts';
 import {
   dismissRecommendationAction,
@@ -76,7 +76,7 @@ export function RecommendationsClient({
       setError(result.error);
       return;
     }
-    const url = recommendationsApi.buildShareDownloadUrl(workspaceId, result.data.token);
+    const url = recommendationShareUrls.buildShareDownloadUrl(workspaceId, result.data.token);
     setShareToken({ url, expiresInSeconds: result.data.expiresInSeconds });
     setShareCopied(false);
   };

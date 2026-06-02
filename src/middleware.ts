@@ -8,8 +8,8 @@ import {
 } from '@/server/cookies';
 
 // Routes that require an authenticated session. Anything not matching here
-// (e.g. /signup verification flows) passes through; AuthGuard / page-level
-// checks remain in place as a defence-in-depth layer.
+// passes through; this is the primary route guard (the editor pages also
+// re-check server-side when serverFetch hits a 401).
 // `/api/export` is included so proactive refresh runs before the route
 // handler proxies the blob download to Spring.
 const PROTECTED_PREFIXES = ['/home', '/workspace', '/api/export'];

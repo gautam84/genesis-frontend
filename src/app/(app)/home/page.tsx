@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { SessionExpiredError } from '@/server/errors';
 import { listWorkspaces } from '@/features/workspace/workspace.gateway';
-import { HomeClient } from '@/features/workspace/components/HomeClient';
+import { HomeClient } from '@/features/home/components/HomeClient';
 
 export default async function HomePage() {
   try {

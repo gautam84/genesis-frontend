@@ -1,17 +1,14 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { DocumentResponse } from '@/lib/api';
-import { SessionExpiredError } from '@/lib/errors';
+import type { ActionResult } from '@/server/contracts/common';
+import { SessionExpiredError } from '@/server/errors';
+import type { DocumentResponse } from './document.contracts';
 import {
   deleteDocument,
   updateDocumentStatus,
   uploadDocument,
-} from '@/lib/server/document';
-
-type ActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+} from './document.gateway';
 
 function toError(err: unknown, fallback: string): { ok: false; error: string } {
   if (err instanceof SessionExpiredError) {

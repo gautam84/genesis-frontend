@@ -1,7 +1,8 @@
 import 'server-only';
 
-import { ApiResponse, Notification } from '@/lib/api';
-import { serverFetch } from './api';
+import { ApiResponse } from '@/server/contracts/common';
+import { serverFetch } from '@/server/http';
+import { Notification } from './notifications.contracts';
 
 export async function listNotifications(): Promise<Notification[]> {
   const res = await serverFetch<ApiResponse<Notification[]>>('/api/notifications');

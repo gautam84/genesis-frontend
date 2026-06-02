@@ -14,7 +14,7 @@ import {
 import {
   dismissRecommendationAction,
   issueShareTokenAction,
-} from '@/lib/actions/recommendations';
+} from '@/features/recommendations/recommendations.actions';
 
 const VISIBLE_BY_DEFAULT = 10;
 

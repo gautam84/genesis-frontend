@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import type { AnnotationType } from '@/lib/api';
 import { SessionExpiredError } from '@/lib/errors';
 import { getWorkspaceDocuments } from '@/lib/server/editor';
-import { listRecommendations } from '@/lib/server/recommendations';
+import { listRecommendations } from '@/features/recommendations/recommendations.gateway';
 import { getWorkspaceById } from '@/lib/server/workspace';
 import { RecommendationsClient } from './RecommendationsClient';
 

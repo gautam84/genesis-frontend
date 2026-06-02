@@ -1,7 +1,8 @@
 import 'server-only';
 
-import { ApiResponse, Recommendation, ShareTokenResponse } from '@/lib/api';
-import { serverFetch } from './api';
+import { ApiResponse } from '@/server/contracts/common';
+import { serverFetch } from '@/server/http';
+import { Recommendation, ShareTokenResponse } from './recommendations.contracts';
 
 export async function listRecommendations(
   workspaceId: string,

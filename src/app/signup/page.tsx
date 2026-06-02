@@ -17,10 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { signupAction } from '@/lib/actions/auth';
-import { useAuth } from '@/lib/auth';
+import { signupAction } from '@/features/auth/auth.actions';
+import { useAuth } from '@/features/auth/auth.provider';
 import { FullScreenLoader, Spinner } from '@/components/Spinner';
-import { signupSchema, SignupFormValues } from '@/lib/validation/auth';
+import { signupSchema, SignupFormValues } from '@/features/auth/auth.schemas';
 
 export default function SignUpPage() {
   const router = useRouter();

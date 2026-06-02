@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/features/auth/auth.provider';
 import {
   type WorkspaceResponse,
   type DocumentResponse,
@@ -37,7 +37,7 @@ import {
   deleteDocumentAction,
   uploadDocumentAction,
 } from '@/features/document/document.actions';
-import { NotificationDropdown } from '@/components/NotificationDropdown';
+import { NotificationDropdown } from '@/features/notifications/components/NotificationDropdown';
 import { Sidebar, SidebarItem } from './_components/Sidebar';
 import { DocumentGrid, DocumentFilter } from './_components/DocumentGrid';
 import { MemberManagement } from './_components/MemberManagement';

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useNotifications } from '@/lib/notifications';
+import { useNotifications } from '@/features/notifications/notifications.provider';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,

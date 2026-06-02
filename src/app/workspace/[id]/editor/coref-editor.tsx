@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/features/auth/auth.provider';
 import {
   type WorkspaceEditorResponse,
   type DocumentContentResponse,

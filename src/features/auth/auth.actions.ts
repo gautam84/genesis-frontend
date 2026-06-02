@@ -1,27 +1,22 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import type {
-  ApiResponse,
-  LoginRequest,
-  SignupRequest,
-  TokenResponse,
-  UserResponse,
-} from '@/lib/api';
-import { SessionExpiredError } from '@/lib/errors';
+import type { ApiResponse, ActionResult } from '@/server/contracts/common';
+import { SessionExpiredError } from '@/server/errors';
+import { API_BASE_URL } from '@/config/env';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
   clearSessionCookies,
   serverFetch,
   setSessionCookies,
-} from '@/lib/server/api';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-
-type ActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+} from '@/server/http';
+import type {
+  LoginRequest,
+  SignupRequest,
+  TokenResponse,
+  UserResponse,
+} from './auth.contracts';
 
 export async function loginAction(
   request: LoginRequest,

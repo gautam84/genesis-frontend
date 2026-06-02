@@ -2,8 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserResponse } from './api';
-import { getSessionAction, loginAction, logoutAction } from './actions/auth';
+import { UserResponse } from './auth.contracts';
+import { getSessionAction, loginAction, logoutAction } from './auth.actions';
 
 interface AuthContextType {
     user: UserResponse | null;

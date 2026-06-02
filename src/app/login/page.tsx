@@ -10,9 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/features/auth/auth.provider';
 import { FullScreenLoader, Spinner } from '@/components/Spinner';
-import { loginSchema, LoginFormValues } from '@/lib/validation/auth';
+import { loginSchema, LoginFormValues } from '@/features/auth/auth.schemas';
 
 export default function LoginPage() {
   const router = useRouter();

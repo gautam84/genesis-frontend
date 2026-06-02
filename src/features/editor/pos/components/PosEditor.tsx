@@ -49,12 +49,8 @@ import { EditorLoadMore } from '@/components/editor/EditorLoadMore';
 import { DocumentSwitcher } from '@/components/editor/DocumentSwitcher';
 import { EditorHelpPanel } from '@/components/editor/EditorHelpPanel';
 import { FullScreenLoader } from '@/components/Spinner';
+import { CUSTOM_TAG_PALETTE } from '@/lib/constants';
 import { toast } from 'sonner';
-
-const CUSTOM_TAG_PALETTE = [
-  '#0ea5e9', '#22c55e', '#f97316', '#a855f7', '#eab308',
-  '#ec4899', '#14b8a6', '#f43f5e', '#6366f1', '#84cc16',
-];
 
 // Group flat annotations into Record<tokenId, PosAnnotation[]>.
 function groupAnnotationsByToken(annotations: PosAnnotation[]): Record<string, PosAnnotation[]> {

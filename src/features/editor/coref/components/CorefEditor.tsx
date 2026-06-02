@@ -45,13 +45,8 @@ import { useEditorSession } from '@/hooks/useEditorSession';
 import { DocumentSwitcher } from '@/components/editor/DocumentSwitcher';
 import { EditorHelpPanel } from '@/components/editor/EditorHelpPanel';
 import { FullScreenLoader } from '@/components/Spinner';
+import { CLUSTER_COLORS, EDITOR_PAGE_SIZE as PAGE_SIZE } from '@/lib/constants';
 import { toast } from 'sonner';
-
-// Cluster colors palette
-const CLUSTER_COLORS = [
-  '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
-  '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16',
-];
 
 interface CorefEditorProps {
   workspaceId: string;
@@ -119,7 +114,6 @@ export default function CorefEditor({ workspaceId, workspaceName }: CorefEditorP
     loading,
   });
 
-  const PAGE_SIZE = 50;
 
   // Load workspace data on mount
   useEffect(() => {

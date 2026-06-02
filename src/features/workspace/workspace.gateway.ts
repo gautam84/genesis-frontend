@@ -12,9 +12,8 @@ import {
 } from './workspace.contracts';
 
 /**
- * Server-side wrappers around the workspace endpoints. Same shapes as
- * `workspaceApi` in `@/lib/api`, but they read auth from cookies via
- * `serverFetch` and are safe to call from Server Components / Actions.
+ * Server-side wrappers around the workspace endpoints. They read auth from
+ * cookies via `serverFetch` and are safe to call from Server Components / Actions.
  */
 
 export async function listWorkspaces(): Promise<WorkspaceResponse[]> {

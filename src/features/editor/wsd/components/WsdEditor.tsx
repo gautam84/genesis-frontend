@@ -10,13 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/features/auth/auth.provider';
-import {
-  type WorkspaceEditorResponse,
-  type DocumentContentResponse,
-  type TokenDto,
-  type WsdSense,
-  type WsdAnnotation,
-} from '@/lib/api';
+import type {
+  WorkspaceEditorResponse,
+  DocumentContentResponse,
+  TokenDto,
+} from '@/features/editor/core/editor.contracts';
+import type { WsdSense, WsdAnnotation } from '@/features/editor/wsd/wsd.contracts';
 import {
   getDocumentContentAction,
   getEditorDocumentsAction,

@@ -1,11 +1,31 @@
-# Architecture (Target)
+# Architecture
 
-This is the **target** structure for `genesis-frontend` — a refactor blueprint, not the
-current on-disk layout. It adapts a feature-sliced architecture to Genesis's actual
-problem: four divergent annotation editors over one Spring backend, with a
+This is the structure for `genesis-frontend` — a feature-sliced architecture adapted to
+Genesis's actual problem: four divergent annotation editors over one Spring backend, with a
 cookie-based auth layer Next.js owns by hand.
 
-Inline `←` notes point at where each piece lives today, so this doubles as a migration map.
+The inline `←` notes record where each piece lived before the migration (the `lib/`-centric
+layout), so this doubles as a historical migration map.
+
+## Migration status (completed 2026-06)
+
+The migration landed as a stack of always-green PRs (server layer → config/fonts/constants →
+leaf data-tiers → auth/workspace → editor slices → route groups → editor-core relocation →
+shim teardown). Deliberate deviations from the original blueprint below:
+
+- **`EditorShell.tsx` / `span-math.ts` were NOT extracted.** Investigation confirmed the
+  editors diverge fundamentally (NER nested-span depth-packing vs coref overlap-prevention);
+  the only shared primitive was a trivial `[min,max]`. The genuinely shared pieces
+  (`DocumentSwitcher`, `EditorHelpPanel`, `EditorLoadMore`, the two hooks) live in
+  `editor/core/`; divergent chrome + span rendering stay per-editor (as the
+  "Deliberately omitted" section already prescribed).
+- **Editor hooks kept their names** (`useEditorSession`, `usePaginatedDocument`) rather than
+  being split/renamed into `useAutosave` + `useEditorDocuments` — that split is a behavioural
+  refactor with no functional gain, deliberately skipped.
+- **`CursorPage<T>` kept its name** (not renamed to `Page<T>`) — see the note in
+  `server/contracts/common.ts`.
+- **ESLint `import/no-restricted-paths` boundary rules** were deferred (would add a plugin
+  dependency); a worthwhile follow-up.
 
 ## Guiding principles
 

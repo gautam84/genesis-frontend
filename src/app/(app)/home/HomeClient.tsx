@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth, useRequireAuth } from '@/features/auth/auth.provider';
-import { WorkspaceResponse, AnnotationType, CreateWorkspaceRequest } from '@/lib/api';
+import { WorkspaceResponse, AnnotationType, CreateWorkspaceRequest } from '@/features/workspace/workspace.contracts';
 import { createWorkspaceAction } from '@/features/workspace/workspace.actions';
 import { LogOut, Settings, User } from 'lucide-react';
 import { formatDistanceToNow, isToday, isYesterday, subDays, isAfter, format } from 'date-fns';

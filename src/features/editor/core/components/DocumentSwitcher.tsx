@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import type { EditorDocumentInfo } from '@/lib/api';
+import type { EditorDocumentInfo } from '@/features/editor/core/editor.contracts';
 
 interface DocumentSwitcherProps {
   documents: EditorDocumentInfo[];

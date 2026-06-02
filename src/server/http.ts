@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { cookies } from 'next/headers';
-import { TokenResponse } from '@/lib/api';
+import { TokenResponse } from '@/features/auth/auth.contracts';
 import { NetworkError, SessionExpiredError } from '@/server/errors';
 import {
   ACCESS_COOKIE,

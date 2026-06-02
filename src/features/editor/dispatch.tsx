@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import type { AnnotationType } from '@/lib/api';
+import type { AnnotationType } from '@/features/workspace/workspace.contracts';
 import { SessionExpiredError } from '@/server/errors';
 import { getWorkspaceById } from '@/features/workspace/workspace.gateway';
 import { isOneOf } from '@/lib/utils';

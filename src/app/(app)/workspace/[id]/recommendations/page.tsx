@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
-import type { AnnotationType } from '@/lib/api';
-import { SessionExpiredError } from '@/lib/errors';
+import type { AnnotationType } from '@/features/workspace/workspace.contracts';
+import { SessionExpiredError } from '@/server/errors';
 import { getWorkspaceDocuments } from '@/features/editor/core/editor.gateway';
 import { listRecommendations } from '@/features/recommendations/recommendations.gateway';
 import { getWorkspaceById } from '@/features/workspace/workspace.gateway';

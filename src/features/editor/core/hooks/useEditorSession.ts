@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { WorkspaceEditorResponse } from '@/lib/api';
+import { WorkspaceEditorResponse } from '@/features/editor/core/editor.contracts';
 import { saveEditorSessionAction } from '@/features/editor/core/editor.actions';
 
 interface UseEditorSessionParams {

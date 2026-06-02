@@ -17,13 +17,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/features/auth/auth.provider';
-import {
-  type WorkspaceEditorResponse,
-  type DocumentContentResponse,
-  type TokenDto,
-  type MentionDto,
-  type ClusterDto,
-} from '@/lib/api';
+import type {
+  WorkspaceEditorResponse,
+  DocumentContentResponse,
+  TokenDto,
+} from '@/features/editor/core/editor.contracts';
+import type { MentionDto, ClusterDto } from '@/features/editor/coref/coref.contracts';
 import {
   getDocumentContentAction,
   getEditorDocumentsAction,

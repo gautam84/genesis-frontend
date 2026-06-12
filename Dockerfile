@@ -3,8 +3,10 @@
 
 FROM node:22-alpine AS base
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm — pinned to v9 (matches lockfileVersion 9.0). pnpm@latest now
+# resolves to v10, which refuses to run dependency build scripts (sharp, msw,
+# unrs-resolver) without an approve-builds allowlist and fails CI installs.
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 # Stage 1: Install dependencies
 FROM base AS deps

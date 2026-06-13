@@ -34,6 +34,10 @@ Genesis is a full-stack NLP annotation platform for linguistics teams and ML dat
 
 The app handles multi-task annotation workflows (coreference, named-entity recognition, part-of-speech tagging, word-sense disambiguation), workspace and team management, document import/export, and real-time notifications.
 
+This web client is the browser-facing layer of the wider Genesis system — it talks only to the backend API over REST + STOMP:
+
+![System architecture](./images/02-system-architecture.png)
+
 ## Features
 
 - **Workspace dashboard** — Create, search, and switch between annotation projects with progress tracking and role-based access.
@@ -47,7 +51,7 @@ The app handles multi-task annotation workflows (coreference, named-entity recog
 
 ## Screenshots
 
-> Screenshots are tracked in the backend repo's `images/` folder. See the [Genesis backend README](https://github.com/subarnasaikia/genesis/blob/main/README.md#features) for full views of the home page, editor, workspace overview, and notification surfaces.
+> Full annotated screenshots of every screen — home, workspace overview, the four editors (coref / NER / POS / WSD), recommendations, notifications, import/export, and sharing — live in the **[User Guide](https://subarnasaikia.github.io/genesis-deploy/user-guide/)** of the published handbook.
 
 ## Tech stack
 
@@ -105,6 +109,14 @@ The backend issues a short-lived access token (15 min default) and a long-lived 
 Protected routes use `AuthGuard`; server-only data fetching uses the helpers in `src/lib/server/`.
 
 ## Project structure
+
+The App Router routes form a guarded flow from auth through the workspace into the per-task editors:
+
+![Frontend navigation](./images/13-frontend-navigation.png)
+
+Data flows from Server Components and Server Actions through the typed API layer to the backend, with client components hydrating from the `ApiResponse<T>` envelope:
+
+![Frontend data flow](./images/14-frontend-data-flow.png)
 
 ```text
 src/
@@ -170,6 +182,24 @@ A typical deploy:
 - Mobile Safari 16+ and Chrome for Android 110+.
 - No IE11 or legacy Edge support.
 
+## Repositories & documentation
+
+Genesis ships from three repositories, each with a single responsibility:
+
+| Repository | Role |
+|---|---|
+| [`gautam84/genesis-frontend`](https://github.com/gautam84/genesis-frontend) | **Frontend** — this repo. Next.js 15 web client. |
+| [`subarnasaikia/genesis`](https://github.com/subarnasaikia/genesis) | **Backend** — Spring Boot API: auth, workspaces, annotation, notifications, import/export, PostgreSQL. |
+| [`subarnasaikia/genesis-deploy`](https://github.com/subarnasaikia/genesis-deploy) | **Deployment** — Docker Compose stack, CI, and the documentation handbook. No application code. |
+
+Each app repo uses two branches: **`main`** (latest reviewed state — every change lands via PR) and **`uni-prod`** (exactly what runs in production, updated from `main` via PR).
+
+📖 **Full handbook** — architecture, functionality, user guide, deployment, and operations — is published from `genesis-deploy` to GitHub Pages:
+
+> **<https://subarnasaikia.github.io/genesis-deploy/>**
+
+The diagrams in this README are generated and version-controlled in the project report repository (`genesis-report-and-docs`) and mirrored into the deploy handbook.
+
 ## Contributing
 
 Issues and PRs welcome.
@@ -193,5 +223,7 @@ License TBD — the repository is currently private/source-available. Reach out 
 ---
 
 <p align="center">
-  Backend repo: <a href="https://github.com/subarnasaikia/genesis">subarnasaikia/genesis</a>
+  <a href="https://github.com/subarnasaikia/genesis">Backend</a> ·
+  <a href="https://github.com/subarnasaikia/genesis-deploy">Deployment</a> ·
+  <a href="https://subarnasaikia.github.io/genesis-deploy/">Handbook (GitHub Pages)</a>
 </p>

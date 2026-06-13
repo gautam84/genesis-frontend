@@ -9,7 +9,7 @@ import {
   REFRESH_MAX_AGE_SECONDS,
   cookieOptions,
 } from '@/server/cookies';
-import { API_BASE_URL } from '@/config/env';
+import { SERVER_API_BASE_URL } from '@/config/env';
 
 /**
  * Server-only Spring API client. Reads the access token from HttpOnly
@@ -78,9 +78,9 @@ export async function serverFetch<T>(endpoint: string, init?: RequestInit): Prom
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${endpoint}`, { ...init, headers });
+    response = await fetch(`${SERVER_API_BASE_URL}${endpoint}`, { ...init, headers });
   } catch (cause) {
-    throw new NetworkError(`${API_BASE_URL}${endpoint}`, cause);
+    throw new NetworkError(`${SERVER_API_BASE_URL}${endpoint}`, cause);
   }
 
   if (response.status === 401) {

@@ -1,14 +1,14 @@
 import { cookies } from 'next/headers';
 import { ACCESS_COOKIE } from '@/server/http';
+import { SERVER_API_BASE_URL } from '@/config/env';
 
 /**
  * Proxies the export blob from Spring to the browser. Server actions can't
  * stream binary, so the download path lives as a route handler instead.
  * Middleware refreshes the access cookie before this handler runs (path is
- * in the protected prefix list).
+ * in the protected prefix list). Runs server-side, so it targets the internal
+ * API URL (the public `NEXT_PUBLIC_API_URL` may be unreachable container-side).
  */
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 const ALLOWED_TYPES = new Set(['workspaces', 'documents']);
 
@@ -28,7 +28,7 @@ export async function POST(
   }
 
   const body = await request.text();
-  const upstream = await fetch(`${API_BASE_URL}/api/export/${type}/${id}`, {
+  const upstream = await fetch(`${SERVER_API_BASE_URL}/api/export/${type}/${id}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,

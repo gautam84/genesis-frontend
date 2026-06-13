@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { API_BASE_URL } from '@/config/env';
+import { SERVER_API_BASE_URL } from '@/config/env';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
@@ -34,7 +34,7 @@ export async function middleware(request: NextRequest) {
   if (isProtected && !hasAccess && refreshToken) {
     let refreshResponse: Response | null = null;
     try {
-      refreshResponse = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      refreshResponse = await fetch(`${SERVER_API_BASE_URL}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),

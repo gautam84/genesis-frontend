@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import type { ApiResponse, ActionResult } from '@/server/contracts/common';
 import { SessionExpiredError } from '@/server/errors';
-import { API_BASE_URL } from '@/config/env';
+import { SERVER_API_BASE_URL } from '@/config/env';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
@@ -23,13 +23,13 @@ export async function loginAction(
 ): Promise<ActionResult<TokenResponse>> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+    response = await fetch(`${SERVER_API_BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
     });
   } catch {
-    return { ok: false, error: `Cannot reach server at ${API_BASE_URL}` };
+    return { ok: false, error: `Cannot reach server at ${SERVER_API_BASE_URL}` };
   }
 
   if (!response.ok) {
@@ -47,13 +47,13 @@ export async function signupAction(
 ): Promise<ActionResult<UserResponse>> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
+    response = await fetch(`${SERVER_API_BASE_URL}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
     });
   } catch {
-    return { ok: false, error: `Cannot reach server at ${API_BASE_URL}` };
+    return { ok: false, error: `Cannot reach server at ${SERVER_API_BASE_URL}` };
   }
 
   if (!response.ok) {
@@ -120,7 +120,7 @@ export async function logoutAction(): Promise<{ ok: true }> {
 
   if (refreshToken) {
     try {
-      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+      await fetch(`${SERVER_API_BASE_URL}/api/auth/logout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),

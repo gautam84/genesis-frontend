@@ -34,6 +34,12 @@ ENV NODE_ENV=production
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+# Whether session cookies carry the `Secure` flag. The middleware (Edge runtime)
+# can inline this at build time, so it is provided as a build arg in addition to
+# the runtime env. Set COOKIE_SECURE=false for an HTTP-only deploy with no TLS.
+ARG COOKIE_SECURE
+ENV COOKIE_SECURE=$COOKIE_SECURE
+
 # Build the application
 RUN pnpm run build
 

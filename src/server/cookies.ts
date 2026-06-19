@@ -14,9 +14,19 @@ export const REFRESH_COOKIE = 'genesis_refresh_token';
 export const REFRESH_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 export function cookieOptions(maxAge: number) {
+  // Browsers silently DROP `Secure` cookies sent over plain HTTP, which breaks
+  // login on a non-TLS deploy (the tokens are never stored, so the session
+  // never sticks). Default to secure in production, but allow opting out for
+  // an HTTP-only deployment (e.g. an internal LAN/IP deploy with no TLS) by
+  // setting COOKIE_SECURE=false. Only do this on a trusted network — it sends
+  // session cookies in cleartext.
+  const secure =
+    process.env.COOKIE_SECURE === 'false'
+      ? false
+      : process.env.NODE_ENV === 'production';
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure,
     sameSite: 'lax' as const,
     path: '/',
     maxAge,
